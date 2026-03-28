@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agentdial -- One identity. Every channel.</title>
+    <meta
+      name="description"
+      content="Give your AI agent a phone number, Telegram bot, Discord server, and more. One identity file. Seven channels. Zero boilerplate."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Poppins:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg: #141312;
+        --bg-raised: #1c1b19;
+        --bg-card: #232220;
+        --border: #2e2c29;
+        --text: #e8e6e3;
+        --text-muted: #9b9891;
+        --purple: #8b5cf6;
+        --purple-dim: #6b21a8;
+        --purple-glow: rgba(139, 92, 246, 0.08);
+        --serif: "Instrument Serif", Georgia, serif;
+        --sans: "Poppins", system-ui, sans-serif;
+      }
+      html {
+        scroll-behavior: smooth;
+        font-size: 16px;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        line-height: 1.6;
+        font-weight: 300;
+        -webkit-font-smoothing: antialiased;
+      }
+      ::selection {
+        background: var(--purple);
+        color: #fff;
+      }
+      a {
+        color: var(--purple);
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      a:hover {
+        color: #a78bfa;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: var(--serif);
+        font-weight: 400;
+        letter-spacing: -0.01em;
+      }
+
+      /* Layout */
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      section {
+        padding: 96px 0;
+      }
+      @media (max-width: 640px) {
+        section {
+          padding: 64px 0;
+        }
+      }
+
+      /* Reveal animation */
+      .reveal {
+        opacity: 0;
+        transform: translateY(20px);
+        transition:
+          opacity 0.5s ease,
+          transform 0.5s ease;
+      }
+      .reveal.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* ── Hero ── */
+      .hero {
+        padding: 120px 0 80px;
+        text-align: left;
+      }
+      .hero h1 {
+        font-size: clamp(2.4rem, 5.5vw, 4rem);
+        line-height: 1.1;
+        margin-bottom: 20px;
+        color: var(--text);
+      }
+      .hero h1 em {
+        font-style: italic;
+        color: var(--purple);
+      }
+      .hero .sub {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        max-width: 520px;
+        margin-bottom: 40px;
+      }
+      .hero .sub strong {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .hero-code {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px 24px;
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 0.85rem;
+        line-height: 1.7;
+        color: var(--text-muted);
+        max-width: 580px;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .hero-code .cmd {
+        color: var(--text);
+      }
+      .hero-code .prompt {
+        color: var(--purple);
+      }
+      .hero-ascii {
+        margin-top: 32px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px 24px;
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 0.72rem;
+        line-height: 1.5;
+        color: var(--text-muted);
+        max-width: 580px;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .hero-ascii .hi {
+        color: var(--purple);
+      }
+      .hero-ascii .ok {
+        color: #4ade80;
+      }
+
+      /* ── Problem ── */
+      .problem-head {
+        font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+        margin-bottom: 8px;
+      }
+      .problem-sub {
+        color: var(--text-muted);
+        font-size: 1rem;
+        margin-bottom: 48px;
+        max-width: 540px;
+      }
+      .pain-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+      }
+      .pain-card {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 28px 24px;
+        transition:
+          border-color 0.25s,
+          transform 0.25s;
+      }
+      .pain-card:hover {
+        border-color: var(--purple-dim);
+        transform: translateY(-2px);
+      }
+      .pain-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: var(--purple-glow);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+        font-size: 1.1rem;
+        color: var(--purple);
+        font-weight: 600;
+        font-family: var(--sans);
+      }
+      .pain-card h3 {
+        font-size: 1.15rem;
+        margin-bottom: 8px;
+      }
+      .pain-card p {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      /* ── Steps ── */
+      .steps-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: 48px;
+      }
+      .step {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 28px 24px;
+        position: relative;
+      }
+      .step-num {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-family: var(--serif);
+        font-size: 2.4rem;
+        color: var(--border);
+        line-height: 1;
+      }
+      .step h3 {
+        font-size: 1.1rem;
+        margin-bottom: 6px;
+      }
+      .step p {
+        color: var(--text-muted);
+        font-size: 0.88rem;
+        margin-bottom: 16px;
+      }
+      .step code {
+        display: block;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px 14px;
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        white-space: pre;
+        overflow-x: auto;
+      }
+      .step code .kw {
+        color: var(--purple);
+      }
+
+      /* ── Channels ── */
+      .ch-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        margin-top: 48px;
+      }
+      @media (max-width: 800px) {
+        .ch-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 480px) {
+        .ch-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .ch-card {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 22px 20px;
+        transition:
+          border-color 0.25s,
+          transform 0.25s;
+      }
+      .ch-card:hover {
+        border-color: var(--purple-dim);
+        transform: translateY(-2px);
+      }
+      .ch-name {
+        font-family: var(--sans);
+        font-weight: 500;
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+      }
+      .ch-meta {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+      }
+      .ch-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 500;
+        margin-top: 8px;
+      }
+      .ch-tag.free {
+        background: rgba(74, 222, 128, 0.1);
+        color: #4ade80;
+      }
+      .ch-tag.paid {
+        background: rgba(251, 191, 36, 0.1);
+        color: #fbbf24;
+      }
+
+      /* ── Protocol ── */
+      .proto-layout {
+        display: grid;
+        grid-template-columns: 1fr 1.2fr;
+        gap: 32px;
+        margin-top: 48px;
+        align-items: start;
+      }
+      @media (max-width: 740px) {
+        .proto-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      .proto-text h3 {
+        font-size: 1.3rem;
+        margin-bottom: 12px;
+      }
+      .proto-text p {
+        color: var(--text-muted);
+        font-size: 0.92rem;
+        margin-bottom: 16px;
+      }
+      .proto-file {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px 22px;
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 0.78rem;
+        line-height: 1.6;
+        color: var(--text-muted);
+        white-space: pre;
+        overflow-x: auto;
+      }
+      .proto-file .key {
+        color: var(--purple);
+      }
+      .proto-file .val {
+        color: #4ade80;
+      }
+      .proto-file .cmt {
+        color: #555;
+      }
+
+      /* ── Voice ── */
+      .voice-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-top: 48px;
+      }
+      @media (max-width: 640px) {
+        .voice-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      .v-card {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        transition: border-color 0.25s;
+      }
+      .v-card:hover {
+        border-color: var(--purple-dim);
+      }
+      .v-card .v-name {
+        font-weight: 500;
+        font-size: 0.92rem;
+        margin-bottom: 2px;
+      }
+      .v-card .v-type {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+      }
+
+      /* ── MCP ── */
+      .mcp-block {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 28px 28px;
+        margin-top: 48px;
+        max-width: 640px;
+      }
+      .mcp-block code {
+        display: block;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 14px 16px;
+        font-family: "SF Mono", Menlo, monospace;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-top: 16px;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .mcp-block code .kw {
+        color: var(--purple);
+      }
+
+      /* ── Footer ── */
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 40px 0;
+        text-align: center;
+      }
+      footer p {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+      }
+      footer a {
+        color: var(--purple);
+      }
+      .footer-links {
+        display: flex;
+        gap: 24px;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+
+      /* ── Utils ── */
+      .section-label {
+        font-family: var(--sans);
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--purple);
+        margin-bottom: 12px;
+      }
+      .section-head {
+        font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+        margin-bottom: 8px;
+      }
+      .section-sub {
+        color: var(--text-muted);
+        font-size: 1rem;
+        margin-bottom: 0;
+        max-width: 540px;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .reveal {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="wrap">
+        <div class="reveal">
+          <h1>
+            Give your agent a phone number.<br /><em>And everything else.</em>
+          </h1>
+          <p class="sub">
+            <strong>AIP</strong> -- Agent Identity Protocol. One command. Every
+            channel.
+          </p>
+          <div class="hero-code">
+            <span class="prompt">$</span>
+            <span class="cmd">npm install -g agentdial</span>
+            <span class="prompt">$</span>
+            <span class="cmd">agentdial setup</span>
+          </div>
+          <div class="hero-ascii">
+            <span class="hi"> ___ __ ____ _ __</span>
+            <span class="hi"> / _ |___ ____ ___ ____/ / / __ \(_)___ _/ /</span>
+            <span class="hi"> / __ / _ `/ -_) _ \/ __/ / / / / / / _ `/ /</span>
+            <span class="hi">/_/ |_\_, /\__/_//_/\__/_/ /_/ /_/_/\_,_/_/</span>
+            <span class="hi"> /___/</span>
+
+            v1.0.0 One identity. Every channel. Agent Identity Name:
+            <span class="ok">Spark</span> Tagline: Your AI concierge Backend:
+            http://localhost:8080/agent Channel Status Cost Telegram Bot
+            <span class="ok">active</span> Free Discord Bot
+            <span class="ok">active</span> Free Slack App
+            <span class="ok">active</span> Free SMS (Twilio)
+            <span class="ok">active</span> ~$1.15/mo
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem -->
+    <section id="problem">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="section-label">The Problem</p>
+          <h2 class="problem-head">
+            Agents need identity. Nothing provides it.
+          </h2>
+          <p class="problem-sub">
+            MCP solved tools. A2A solved collaboration. Nothing solved identity
+            -- until now.
+          </p>
+        </div>
+        <div class="pain-grid" style="margin-top: 48px">
+          <div class="pain-card reveal">
+            <div class="pain-icon">7x</div>
+            <h3>Seven integrations, seven SDKs</h3>
+            <p>
+              Telegram, Discord, Slack, Twilio, SendGrid -- each with its own
+              API, auth flow, and message format. Hundreds of lines per channel.
+            </p>
+          </div>
+          <div class="pain-card reveal">
+            <div class="pain-icon">0</div>
+            <h3>No standard identity format</h3>
+            <p>
+              Your agent is "Bot #4821" on Discord, "@spark_ai_bot" on Telegram,
+              and a phone number on SMS. No unified representation.
+            </p>
+          </div>
+          <div class="pain-card reveal">
+            <div class="pain-icon">...</div>
+            <h3>Credential sprawl</h3>
+            <p>
+              API keys in .env files, bot tokens in dashboards, webhook URLs in
+              Twilio console. One wrong rotation breaks everything.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it Works -->
+    <section id="how">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="section-label">How It Works</p>
+          <h2 class="section-head">Three steps. Two minutes.</h2>
+          <p class="section-sub">
+            From zero to live on Telegram in one terminal session.
+          </p>
+        </div>
+        <div class="steps-grid">
+          <div class="step reveal">
+            <span class="step-num">1</span>
+            <h3>Install</h3>
+            <p>One global install. No build step.</p>
+            <code><span class="kw">npm</span> install -g agentdial</code>
+          </div>
+          <div class="step reveal">
+            <span class="step-num">2</span>
+            <h3>Setup</h3>
+            <p>
+              Interactive wizard creates your IDENTITY.md and picks channels.
+            </p>
+            <code
+              ><span class="kw">agentdial</span> setup
+              <span class="kw">agentdial</span> channels add telegram</code
+            >
+          </div>
+          <div class="step reveal">
+            <span class="step-num">3</span>
+            <h3>Serve</h3>
+            <p>
+              One gateway process. All channels. Your agent backend gets clean
+              JSON.
+            </p>
+            <code
+              ><span class="kw">agentdial</span> serve \ --agent-url
+              http://localhost:8080/agent</code
+            >
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Channels -->
+    <section id="channels">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="section-label">Channels</p>
+          <h2 class="section-head">Seven channels. One gateway.</h2>
+          <p class="section-sub">
+            Free channels need zero payment info. Paid channels are usage-based
+            via Twilio and SendGrid.
+          </p>
+        </div>
+        <div class="ch-grid">
+          <div class="ch-card reveal">
+            <div class="ch-name">Telegram</div>
+            <div class="ch-meta">Bot API, 2 min setup</div>
+            <span class="ch-tag free">Free</span>
+          </div>
+          <div class="ch-card reveal">
+            <div class="ch-name">Discord</div>
+            <div class="ch-meta">Discord.js, 3 min setup</div>
+            <span class="ch-tag free">Free</span>
+          </div>
+          <div class="ch-card reveal">
+            <div class="ch-name">Slack</div>
+            <div class="ch-meta">Socket Mode, 5 min setup</div>
+            <span class="ch-tag free">Free</span>
+          </div>
+          <div class="ch-card reveal">
+            <div class="ch-name">SMS</div>
+            <div class="ch-meta">Twilio, ~$1.15/mo</div>
+            <span class="ch-tag paid">Pay-as-you-go</span>
+          </div>
+          <div class="ch-card reveal">
+            <div class="ch-name">WhatsApp</div>
+            <div class="ch-meta">Twilio, ~$0.005/msg</div>
+            <span class="ch-tag paid">Pay-as-you-go</span>
+          </div>
+          <div class="ch-card reveal">
+            <div class="ch-name">Email</div>
+            <div class="ch-meta">SendGrid, 60-day trial</div>
+            <span class="ch-tag paid">Trial / $19.95/mo</span>
+          </div>
+          <div class="ch-card reveal">
+            <div class="ch-name">Voice</div>
+            <div class="ch-meta">Twilio, ~$0.013/min</div>
+            <span class="ch-tag paid">Pay-as-you-go</span>
+          </div>
+          <div
+            class="ch-card reveal"
+            style="border-style: dashed; opacity: 0.6"
+          >
+            <div class="ch-name">Teams / Messenger / Web</div>
+            <div class="ch-meta">Coming soon</div>
+            <span
+              class="ch-tag"
+              style="background: rgba(139, 92, 246, 0.1); color: var(--purple)"
+              >Planned</span
+            >
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Protocol -->
+    <section id="protocol">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="section-label">Protocol</p>
+          <h2 class="section-head">AIP v1.0 -- Agent Identity Protocol</h2>
+          <p class="section-sub">
+            Like package.json for identity. One file defines who your agent is
+            across every platform.
+          </p>
+        </div>
+        <div class="proto-layout reveal">
+          <div class="proto-text">
+            <h3>IDENTITY.md</h3>
+            <p>
+              YAML frontmatter holds config. Markdown body holds personality,
+              capabilities, and boundaries. Portable, version-controlled,
+              human-readable.
+            </p>
+            <p>
+              Your agent backend is a plain HTTP endpoint. agentdial sends it a
+              normalized
+              <code
+                style="
+                  display: inline;
+                  background: var(--bg);
+                  border: 1px solid var(--border);
+                  border-radius: 4px;
+                  padding: 2px 6px;
+                  font-size: 0.82rem;
+                "
+                >GatewayMessage</code
+              >
+              and expects a
+              <code
+                style="
+                  display: inline;
+                  background: var(--bg);
+                  border: 1px solid var(--border);
+                  border-radius: 4px;
+                  padding: 2px 6px;
+                  font-size: 0.82rem;
+                "
+                >GatewayResponse</code
+              >. Zero lock-in.
+            </p>
+          </div>
+          <div class="proto-file">
+            <span class="cmt">---</span> <span class="key">name</span>:
+            <span class="val">spark</span> <span class="key">tagline</span>:
+            <span class="val">Your AI concierge</span>
+            <span class="key">version</span>: <span class="val">"1.0.0"</span>
+            <span class="key">agent_url</span>:
+            <span class="val">http://localhost:8080/agent</span>
+            <span class="key">channels</span>:
+            <span class="key">telegram</span>: <span class="key">enabled</span>:
+            <span class="val">true</span> <span class="key">handle</span>:
+            <span class="val">@spark_ai_bot</span>
+            <span class="key">discord</span>: <span class="key">enabled</span>:
+            <span class="val">true</span> <span class="key">sms</span>:
+            <span class="key">enabled</span>: <span class="val">true</span>
+            <span class="cmt">---</span>
+
+            <span class="cmt"># Spark</span>
+            <span class="cmt">> Your AI concierge</span>
+
+            ## Personality - Warm, concise, proactive - Uses context from past
+            conversations ## Capabilities - Restaurant reservations - Calendar
+            management - Local recommendations
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Voice -->
+    <section id="voice">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="section-label">Voice</p>
+          <h2 class="section-head">Six voice providers. Plug and play.</h2>
+          <p class="section-sub">
+            Add voice to any agent. agentdial handles the audio pipeline -- you
+            pick the provider.
+          </p>
+        </div>
+        <div class="voice-grid">
+          <div class="v-card reveal">
+            <div class="v-name">OpenAI</div>
+            <div class="v-type">Realtime API</div>
+          </div>
+          <div class="v-card reveal">
+            <div class="v-name">ElevenLabs</div>
+            <div class="v-type">Ultra-realistic TTS</div>
+          </div>
+          <div class="v-card reveal">
+            <div class="v-name">Deepgram</div>
+            <div class="v-type">STT + TTS</div>
+          </div>
+          <div class="v-card reveal">
+            <div class="v-name">Vapi</div>
+            <div class="v-type">Voice agent platform</div>
+          </div>
+          <div class="v-card reveal">
+            <div class="v-name">LiveKit</div>
+            <div class="v-type">WebRTC infrastructure</div>
+          </div>
+          <div class="v-card reveal">
+            <div class="v-name">Custom</div>
+            <div class="v-type">Bring your own</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Claude Code / MCP -->
+    <section id="mcp">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="section-label">Claude Code Integration</p>
+          <h2 class="section-head">MCP server included.</h2>
+          <p class="section-sub">
+            Add agentdial as a tool in Claude Code. Deploy channels, check
+            status, and manage identity -- all from the CLI.
+          </p>
+        </div>
+        <div class="mcp-block reveal">
+          <p style="color: var(--text-muted); font-size: 0.9rem">
+            Add to Claude Code in one command:
+          </p>
+          <code
+            ><span class="kw">claude</span> mcp add agentdial -- npx agentdial
+            mcp-serve</code
+          >
+          <p
+            style="
+              color: var(--text-muted);
+              font-size: 0.85rem;
+              margin-top: 16px;
+            "
+          >
+            Exposes tools:
+            <code
+              style="
+                display: inline;
+                padding: 2px 6px;
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                font-size: 0.78rem;
+              "
+              >deploy_channel</code
+            >,
+            <code
+              style="
+                display: inline;
+                padding: 2px 6px;
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                font-size: 0.78rem;
+              "
+              >list_channels</code
+            >,
+            <code
+              style="
+                display: inline;
+                padding: 2px 6px;
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                font-size: 0.78rem;
+              "
+              >check_status</code
+            >,
+            <code
+              style="
+                display: inline;
+                padding: 2px 6px;
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                font-size: 0.78rem;
+              "
+              >read_identity</code
+            >
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="wrap">
+        <div class="footer-links">
+          <a href="https://github.com/naman10parikh/agentdial">GitHub</a>
+          <a href="https://www.npmjs.com/package/agentdial">npm</a>
+          <a href="https://github.com/naman10parikh/agentdial/blob/main/LICENSE"
+            >MIT License</a
+          >
+        </div>
+        <p>
+          Built by <a href="https://github.com/naman10parikh">Naman Parikh</a>.
+          Powered by Energy.
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      const obs = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              e.target.classList.add("visible");
+              obs.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.12, rootMargin: "0px 0px -40px 0px" },
+      );
+      document.querySelectorAll(".reveal").forEach((el, i) => {
+        el.style.transitionDelay = `${Math.min(i * 60, 300)}ms`;
+        obs.observe(el);
+      });
+    </script>
+  </body>
+</html>

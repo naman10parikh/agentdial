@@ -1,6 +1,6 @@
 {
   "name": "agentdial",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Dial your AI agent into every platform. One identity. Every channel.",
   "type": "module",
   "bin": {
@@ -44,7 +44,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/naman10parikh/agentdial"
+    "url": "git+https://github.com/naman10parikh/agentdial.git"
   },
   "homepage": "https://github.com/naman10parikh/agentdial",
   "bugs": {

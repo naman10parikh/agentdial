@@ -11,6 +11,12 @@ import {
 import { banner, heading, success, error, info, warn } from "../lib/ui.js";
 import { DEFAULT_IDENTITY_FILE } from "../lib/constants.js";
 import { GatewayMessageSchema, ChannelTypeSchema } from "../adapters/types.js";
+import { getCredential } from "../lib/credentials.js";
+import {
+  validateTwilioSignature,
+  validateSlackSignature,
+  validateTelegramSecret,
+} from "../lib/webhook-validation.js";
 import type { ChannelType } from "../adapters/types.js";
 
 export async function cmdServe(opts: {
@@ -85,8 +91,19 @@ export async function cmdServe(opts: {
       const channel: ChannelType = channelResult.data;
 
       try {
-        const body = await readBody(req);
-        const raw = JSON.parse(body) as Record<string, unknown>;
+        const rawBody = await readBody(req);
+
+        // ── Webhook signature validation ──
+        const rejected = await validateWebhook(channel, req, rawBody, port);
+        if (rejected) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({ error: "Forbidden: invalid webhook signature" }),
+          );
+          return;
+        }
+
+        const raw = JSON.parse(rawBody) as Record<string, unknown>;
         const msg = normalizeMessage(raw, channel);
         const response = await routeMessage(msg, agentUrl);
         const formatted = formatResponse(response, channel);
@@ -153,4 +170,106 @@ function readBody(req: import("node:http").IncomingMessage): Promise<string> {
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
     req.on("error", reject);
   });
+}
+
+/** Twilio channels share the same auth token credential key. */
+const TWILIO_CHANNELS: ReadonlySet<ChannelType> = new Set([
+  "sms",
+  "whatsapp",
+  "voice",
+]);
+
+/**
+ * Parse a URL-encoded form body into a flat Record (Twilio sends form-encoded).
+ * Falls back to JSON body keys if the body is JSON.
+ */
+function parseFormParams(body: string): Record<string, string> {
+  try {
+    // Try URL-encoded first (Twilio's default format)
+    const params: Record<string, string> = {};
+    for (const pair of body.split("&")) {
+      const idx = pair.indexOf("=");
+      if (idx === -1) continue;
+      const key = decodeURIComponent(pair.slice(0, idx));
+      const val = decodeURIComponent(pair.slice(idx + 1));
+      params[key] = val;
+    }
+    if (Object.keys(params).length > 0) return params;
+  } catch {
+    // fall through
+  }
+
+  // Fallback: JSON body with string values
+  try {
+    const obj = JSON.parse(body) as Record<string, unknown>;
+    const params: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === "string") params[k] = v;
+    }
+    return params;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Validate incoming webhook signature. Returns true if the request should be REJECTED.
+ * Returns false (allow) if no credentials are configured for the channel
+ * (graceful degradation — validation only enforced when credentials exist).
+ */
+async function validateWebhook(
+  channel: ChannelType,
+  req: import("node:http").IncomingMessage,
+  rawBody: string,
+  port: number,
+): Promise<boolean> {
+  const headers = req.headers;
+
+  // ── Twilio (SMS, WhatsApp, Voice) ──
+  if (TWILIO_CHANNELS.has(channel)) {
+    const authToken = await getCredential(channel, "auth_token");
+    if (!authToken) return false; // No credentials configured — skip validation
+
+    const sig = headers["x-twilio-signature"];
+    if (typeof sig !== "string") return true; // Missing signature header → reject
+
+    // Reconstruct the webhook URL that Twilio used to compute the signature.
+    // Use X-Forwarded-Proto/Host if behind a reverse proxy, otherwise localhost.
+    const proto =
+      (headers["x-forwarded-proto"] as string | undefined) ?? "http";
+    const host =
+      (headers["x-forwarded-host"] as string | undefined) ??
+      headers["host"] ??
+      `localhost:${String(port)}`;
+    const webhookUrl = `${proto}://${host}${req.url ?? ""}`;
+
+    const params = parseFormParams(rawBody);
+    return !validateTwilioSignature(authToken, webhookUrl, params, sig);
+  }
+
+  // ── Slack ──
+  if (channel === "slack") {
+    const signingSecret = await getCredential("slack", "signing_secret");
+    if (!signingSecret) return false;
+
+    const sig = headers["x-slack-signature"];
+    const ts = headers["x-slack-request-timestamp"];
+    if (typeof sig !== "string" || typeof ts !== "string") return true;
+
+    return !validateSlackSignature(signingSecret, ts, rawBody, sig);
+  }
+
+  // ── Telegram ──
+  if (channel === "telegram") {
+    const secret = await getCredential("telegram", "webhook_secret");
+    if (!secret) return false;
+
+    const headerSecret = headers["x-telegram-bot-api-secret-token"];
+    if (typeof headerSecret !== "string") return true;
+
+    return !validateTelegramSecret(secret, headerSecret);
+  }
+
+  // All other channels: no validation implemented yet — allow through
+  return false;
 }

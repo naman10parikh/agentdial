@@ -1,4 +1,5 @@
 import { getCredential } from "../lib/credentials.js";
+import { twilioFetch } from "../lib/twilio.js";
 import type {
   ChannelAdapter,
   ChannelConfig,
@@ -82,41 +83,6 @@ export interface TwilioVoicePayload {
   Confidence?: string;
   Digits?: string;
   [key: string]: string | undefined;
-}
-
-// ── Twilio API Helpers (shared pattern with SMS/WhatsApp) ──
-
-interface TwilioApiResponse {
-  sid?: string;
-  status?: string;
-  message?: string;
-  friendly_name?: string;
-}
-
-function basicAuth(sid: string, token: string): string {
-  return `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`;
-}
-
-async function twilioFetch(
-  sid: string,
-  token: string,
-  path: string,
-  options: RequestInit = {},
-): Promise<TwilioApiResponse> {
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: basicAuth(sid, token),
-      "Content-Type": "application/x-www-form-urlencoded",
-      ...options.headers,
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Twilio API ${res.status}: ${text}`);
-  }
-  return res.json() as Promise<TwilioApiResponse>;
 }
 
 function escapeXml(text: string): string {

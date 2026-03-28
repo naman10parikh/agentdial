@@ -96,6 +96,7 @@ export class TelegramAdapter implements ChannelAdapter {
   private async api<T>(
     method: string,
     body?: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<T> {
     if (!this.token) throw new Error("Telegram bot token not configured");
     const url = `${TELEGRAM_API}${this.token}/${method}`;
@@ -103,6 +104,7 @@ export class TelegramAdapter implements ChannelAdapter {
       method: body ? "POST" : "GET",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
+      signal,
     });
     const json = (await res.json()) as {
       ok: boolean;
@@ -141,10 +143,11 @@ export class TelegramAdapter implements ChannelAdapter {
   private async pollLoop(): Promise<void> {
     while (this.polling) {
       try {
-        const updates = await this.api<TelegramUpdate[]>("getUpdates", {
-          offset: this.lastUpdateId + 1,
-          timeout: 30,
-        });
+        const updates = await this.api<TelegramUpdate[]>(
+          "getUpdates",
+          { offset: this.lastUpdateId + 1, timeout: 30 },
+          this.pollAbort?.signal,
+        );
         for (const update of updates) {
           this.lastUpdateId = update.update_id;
           if (update.message?.text && this.messageHandler) {

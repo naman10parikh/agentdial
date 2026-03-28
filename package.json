@@ -1,6 +1,6 @@
 {
   "name": "agentdial",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Dial your AI agent into every platform. One identity. Every channel.",
   "type": "module",
   "bin": {

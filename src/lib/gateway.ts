@@ -27,6 +27,8 @@ interface RawChannelMessage {
   timestamp?: number;
   date?: number;
   ts?: string;
+  /** Native message ID from the channel (e.g. Telegram message_id, Twilio MessageSid). */
+  nativeId?: string;
 }
 
 export function normalizeMessage(
@@ -41,7 +43,7 @@ export function normalizeMessage(
     raw.timestamp ?? raw.date ?? parseSlackTs(raw.ts) ?? Date.now();
 
   const msg: GatewayMessage = {
-    id: randomUUID(),
+    id: raw.nativeId ?? randomUUID(),
     channel,
     from: String(from),
     text: String(text),

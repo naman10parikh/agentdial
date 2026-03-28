@@ -1,11 +1,9 @@
+import { createInterface } from "node:readline/promises";
+import { stdin, stdout } from "node:process";
 import chalk from "chalk";
 import { ChannelTypeSchema } from "../adapters/types.js";
 import type { ChannelType } from "../adapters/types.js";
-import {
-  saveCredential,
-  listCredentials,
-  listConfiguredChannels,
-} from "../lib/credentials.js";
+import { listCredentials, listConfiguredChannels } from "../lib/credentials.js";
 import { loadConfig, updateConfig } from "../lib/config.js";
 import { hasAdapter, getAdapter } from "../adapters/index.js";
 import { success, error, info, warn, heading, table } from "../lib/ui.js";
@@ -15,6 +13,15 @@ import {
   CHANNEL_DISPLAY_NAMES,
   CHANNEL_SETUP_TIMES,
 } from "../lib/constants.js";
+import {
+  setupTelegram,
+  setupDiscord,
+  setupSlack,
+  setupTwilio,
+  setupEmail,
+} from "./channel-flows.js";
+
+// ── Helpers ──
 
 function validateChannel(channel: string): ChannelType {
   const result = ChannelTypeSchema.safeParse(channel);
@@ -26,6 +33,8 @@ function validateChannel(channel: string): ChannelType {
   return result.data;
 }
 
+// ── Commands ──
+
 export async function cmdChannelAdd(rawChannel: string): Promise<void> {
   const channel = validateChannel(rawChannel);
   heading(`Add Channel: ${CHANNEL_DISPLAY_NAMES[channel] ?? channel}`);
@@ -35,41 +44,57 @@ export async function cmdChannelAdd(rawChannel: string): Promise<void> {
   info(
     `Cost: ${isFree ? chalk.green("Free") : chalk.yellow("Requires paid API")}`,
   );
+  console.log("");
 
-  const requiredCreds = getRequiredCredentials(channel);
+  const rl = createInterface({ input: stdin, output: stdout });
+  let added = false;
 
-  if (requiredCreds.length > 0) {
-    info(`Required credentials: ${requiredCreds.join(", ")}`);
-    warn(
-      "Set credentials with environment variables or `agentdial channels add`.",
-    );
-
-    for (const key of requiredCreds) {
-      const envKey = `AGENTDIAL_${channel.toUpperCase()}_${key.toUpperCase()}`;
-      const value = process.env[envKey];
-      if (value) {
-        await saveCredential(channel, key, value);
-        success(`Loaded ${key} from ${envKey}`);
-      } else {
-        warn(`Missing: ${envKey} — set this before connecting.`);
-      }
+  try {
+    switch (channel) {
+      case "telegram":
+        added = await setupTelegram(rl);
+        break;
+      case "discord":
+        added = await setupDiscord(rl);
+        break;
+      case "slack":
+        added = await setupSlack(rl);
+        break;
+      case "sms":
+      case "whatsapp":
+      case "voice":
+        added = await setupTwilio(rl, channel);
+        break;
+      case "email":
+        added = await setupEmail(rl);
+        break;
+      case "web":
+        success("Web widget requires no credentials. Enabled.");
+        added = true;
+        break;
+      case "teams":
+      case "messenger":
+        warn(`${CHANNEL_DISPLAY_NAMES[channel]} is coming soon.`);
+        return;
     }
+  } finally {
+    rl.close();
   }
 
-  const config = await loadConfig();
-  const channels = config.channels ?? {};
-  channels[channel] = {
-    channel,
-    enabled: true,
-  };
-  await updateConfig({ channels });
-
-  success(`Channel ${channel} added and enabled.`);
+  if (added) {
+    const config = await loadConfig();
+    const channels = config.channels ?? {};
+    channels[channel] = { channel, enabled: true };
+    await updateConfig({ channels });
+    console.log("");
+    success(`${CHANNEL_DISPLAY_NAMES[channel] ?? channel} is live.`);
+    info("Test it: agentdial channels test " + channel);
+    info("Start gateway: agentdial serve");
+  }
 }
 
 export async function cmdChannelRemove(rawChannel: string): Promise<void> {
   const channel = validateChannel(rawChannel);
-
   const config = await loadConfig();
   const channels = config.channels ?? {};
 
@@ -103,7 +128,7 @@ export async function cmdChannelList(): Promise<void> {
           ? chalk.yellow("disabled")
           : chalk.dim("not configured"),
       Cost: isFree ? chalk.green("free") : chalk.dim("paid"),
-      Setup: CHANNEL_SETUP_TIMES[ch] ?? "—",
+      Setup: CHANNEL_SETUP_TIMES[ch] ?? "--",
     };
   });
 
@@ -122,9 +147,7 @@ export async function cmdChannelTest(rawChannel?: string): Promise<void> {
     }
 
     if (!hasAdapter(channel)) {
-      warn(
-        `No adapter available for ${channel}. Credentials found: ${creds.join(", ")}`,
-      );
+      warn(`No adapter for ${channel}. Credentials found: ${creds.join(", ")}`);
       return;
     }
 
@@ -208,27 +231,4 @@ export async function cmdChannelTest(rawChannel?: string): Promise<void> {
   }
 
   table(["Channel", "Status", "Details"], rows);
-}
-
-function getRequiredCredentials(channel: ChannelType): string[] {
-  switch (channel) {
-    case "telegram":
-      return ["bot_token"];
-    case "discord":
-      return ["bot_token", "application_id"];
-    case "slack":
-      return ["bot_token", "app_token", "signing_secret"];
-    case "sms":
-    case "whatsapp":
-    case "voice":
-      return ["account_sid", "auth_token", "phone_number"];
-    case "email":
-      return ["api_key", "from_email"];
-    case "teams":
-      return ["app_id", "app_password"];
-    case "messenger":
-      return ["page_token", "verify_token", "app_secret"];
-    case "web":
-      return [];
-  }
 }

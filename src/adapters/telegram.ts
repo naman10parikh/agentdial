@@ -31,6 +31,20 @@ interface TelegramUpdate {
   };
 }
 
+interface ValidateResult {
+  ok: true;
+  username: string;
+  displayName: string;
+  id: number;
+}
+
+interface ValidateError {
+  ok: false;
+  error: string;
+}
+
+type ValidateTokenResult = ValidateResult | ValidateError;
+
 export class TelegramAdapter implements ChannelAdapter {
   readonly name = "telegram" as const;
   readonly displayName = CHANNEL_DISPLAY_NAMES.telegram;
@@ -47,6 +61,37 @@ export class TelegramAdapter implements ChannelAdapter {
     | null = null;
   private connectedAt: number | null = null;
   private lastMessageAt: number | null = null;
+
+  /**
+   * Validate a Telegram bot token by calling /getMe.
+   * Returns bot info on success, error message on failure.
+   * Static so it can be used from the channels command without instantiating.
+   */
+  static async validateToken(token: string): Promise<ValidateTokenResult> {
+    try {
+      const url = `${TELEGRAM_API}${token}/getMe`;
+      const res = await fetch(url);
+      const json = (await res.json()) as {
+        ok: boolean;
+        result?: TelegramUser;
+        description?: string;
+      };
+      if (!json.ok || !json.result) {
+        return { ok: false, error: json.description ?? "Invalid token" };
+      }
+      return {
+        ok: true,
+        username: json.result.username ?? "unknown",
+        displayName: json.result.first_name,
+        id: json.result.id,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Network error",
+      };
+    }
+  }
 
   private async api<T>(
     method: string,
@@ -174,7 +219,7 @@ export class TelegramAdapter implements ChannelAdapter {
         if (!stored) return { ok: false, error: "No bot token configured" };
         this.token = stored;
       }
-      const me = await this.api<TelegramUser>("getMe");
+      await this.api<TelegramUser>("getMe");
       return { ok: true, error: undefined };
     } catch (err) {
       return {

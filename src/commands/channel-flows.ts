@@ -2,10 +2,24 @@ import { exec } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { platform } from "node:os";
 import chalk from "chalk";
-import { saveCredential } from "../lib/credentials.js";
+import { saveCredential, getCredential } from "../lib/credentials.js";
 import { TelegramAdapter } from "../adapters/telegram.js";
 import { success, error, info, warn, box } from "../lib/ui.js";
 import { CHANNEL_DISPLAY_NAMES } from "../lib/constants.js";
+import {
+  validateTwilioAccount,
+  searchTwilioNumbers,
+  buyTwilioNumber,
+  formatPhone,
+  validateTelegramToken,
+} from "../lib/provisioning.js";
+import { startOAuthFlow } from "../lib/oauth-server.js";
+import {
+  buildSlackManifest,
+  createSlackApp,
+  exchangeSlackCode,
+} from "../lib/slack-manifest.js";
+import type { ChannelType } from "../adapters/types.js";
 
 // ── Shared Helpers ──
 
@@ -18,13 +32,23 @@ function openBrowser(url: string): void {
   });
 }
 
-async function ask(rl: RL, prompt: string): Promise<string> {
-  return (await rl.question(`  ${prompt} `)).trim();
+async function ask(rl: RL, prompt: string, fallback?: string): Promise<string> {
+  const suffix = fallback ? ` (${fallback})` : "";
+  const answer = (await rl.question(`  ${prompt}${suffix} `)).trim();
+  return answer || fallback || "";
 }
 
-async function confirm(rl: RL, prompt: string): Promise<boolean> {
-  const answer = await ask(rl, `${prompt} (y/n)`);
-  return answer.toLowerCase().startsWith("y");
+async function confirm(
+  rl: RL,
+  prompt: string,
+  defaultYes = true,
+): Promise<boolean> {
+  const hint = defaultYes ? "(Y/n)" : "(y/N)";
+  const answer = (await rl.question(`  ${prompt} ${hint} `))
+    .trim()
+    .toLowerCase();
+  if (!answer) return defaultYes;
+  return answer.startsWith("y");
 }
 
 // ── Telegram ──
@@ -188,13 +212,53 @@ export async function setupSlack(rl: RL): Promise<boolean> {
   return true;
 }
 
-// ── Twilio (SMS / WhatsApp / Voice) ──
+// ── Twilio (SMS / WhatsApp / Voice) — Auto-Provisioning ──
 
 export async function setupTwilio(
   rl: RL,
   channel: "sms" | "whatsapp" | "voice",
 ): Promise<boolean> {
   const label = CHANNEL_DISPLAY_NAMES[channel] ?? channel;
+
+  // Check for existing credentials first
+  const existingSid = await getCredential("sms", "account_sid");
+  const existingToken = await getCredential("sms", "auth_token");
+  const existingPhone = await getCredential("sms", "phone_number");
+
+  // Fast path: everything already configured
+  if (existingSid && existingToken && existingPhone) {
+    info(`Twilio already configured with ${formatPhone(existingPhone)}`);
+    const valid = await validateTwilioAccount(existingSid, existingToken);
+    if (valid.ok) {
+      success(`${label} ready on ${formatPhone(existingPhone)}`);
+      return true;
+    }
+    warn("Saved credentials are invalid. Re-entering...");
+  }
+
+  // Credentials exist but no phone? Offer auto-buy
+  if (existingSid && existingToken && !existingPhone) {
+    const valid = await validateTwilioAccount(existingSid, existingToken);
+    if (valid.ok) {
+      success(`Account: ${valid.name}`);
+      if (await confirm(rl, "Buy a phone number? ($1.15/mo)")) {
+        const phone = await autoBuyNumber(rl, existingSid, existingToken);
+        return phone !== null;
+      }
+      // Manual entry fallback
+      const phone = await ask(rl, "Paste phone number (+1234567890):");
+      if (phone) {
+        for (const ch of ["sms", "whatsapp", "voice"] as ChannelType[]) {
+          await saveCredential(ch, "phone_number", phone);
+        }
+        success(`Phone saved: ${formatPhone(phone)}`);
+        return true;
+      }
+      return false;
+    }
+  }
+
+  // Fresh setup
   info("Opening Twilio Console...");
   openBrowser("https://console.twilio.com");
 
@@ -202,12 +266,10 @@ export async function setupTwilio(
     `${label} Setup (Twilio)`,
     [
       "1. Log in to your Twilio Console",
-      "2. Copy your Account SID from the dashboard",
-      "3. Copy your Auth Token (click to reveal)",
-      "4. Get a phone number from Phone Numbers > Manage",
-      ...(channel === "whatsapp"
-        ? ["5. Enable WhatsApp sandbox in Messaging > Try it Out"]
-        : []),
+      "2. Copy your Account SID",
+      "3. Copy your Auth Token",
+      "",
+      chalk.dim("We'll auto-buy a number for you after this."),
     ].join("\n"),
   );
 
@@ -224,40 +286,83 @@ export async function setupTwilio(
   }
 
   info("Validating credentials...");
-  try {
-    const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${sid}.json`,
-      {
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${sid}:${authToken}`).toString("base64")}`,
-        },
-      },
-    );
-    if (!res.ok) {
-      error(`Invalid credentials: ${res.statusText}`);
-      return false;
-    }
-    const acct = (await res.json()) as {
-      friendly_name: string;
-      status: string;
-    };
-    success(`Account: ${acct.friendly_name} (${acct.status})`);
-  } catch (err) {
-    error(
-      `Validation failed: ${err instanceof Error ? err.message : "network error"}`,
-    );
+  const validation = await validateTwilioAccount(sid, authToken);
+  if (!validation.ok) {
+    error(`Invalid credentials: ${validation.error}`);
     return false;
   }
+  success(`Account: ${validation.name} (${validation.status})`);
 
-  await saveCredential(channel, "account_sid", sid);
-  await saveCredential(channel, "auth_token", authToken);
+  // Save for all Twilio channels
+  for (const ch of ["sms", "whatsapp", "voice"] as ChannelType[]) {
+    await saveCredential(ch, "account_sid", sid);
+    await saveCredential(ch, "auth_token", authToken);
+  }
 
+  // Offer auto-buy
+  if (await confirm(rl, "Buy a phone number automatically? ($1.15/mo)")) {
+    const phone = await autoBuyNumber(rl, sid, authToken);
+    if (phone) {
+      success(
+        `3 channels enabled: SMS, WhatsApp, Voice on ${formatPhone(phone)}`,
+      );
+      return true;
+    }
+  }
+
+  // Manual fallback
   const phone = await ask(rl, "Paste phone number (+1234567890):");
   if (phone) {
-    await saveCredential(channel, "phone_number", phone);
-    success(`Phone number saved: ${phone}`);
+    for (const ch of ["sms", "whatsapp", "voice"] as ChannelType[]) {
+      await saveCredential(ch, "phone_number", phone);
+    }
+    success(`Phone saved: ${formatPhone(phone)}`);
   }
   return true;
+}
+
+async function autoBuyNumber(
+  rl: RL,
+  sid: string,
+  token: string,
+): Promise<string | null> {
+  info("Searching for available numbers...");
+  try {
+    const numbers = await searchTwilioNumbers(sid, token, { limit: 3 });
+    if (numbers.length === 0) {
+      error("No numbers found. Buy manually at twilio.com.");
+      return null;
+    }
+
+    console.log("");
+    for (let i = 0; i < numbers.length; i++) {
+      const n = numbers[i]!;
+      console.log(
+        `    ${i + 1}) ${formatPhone(n.number)}  [${n.capabilities.join(", ")}]`,
+      );
+    }
+    console.log("");
+
+    const pick = await ask(rl, `Pick (1-${numbers.length}):`, "1");
+    const idx = parseInt(pick, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= numbers.length) {
+      error("Invalid selection.");
+      return null;
+    }
+
+    const chosen = numbers[idx]!;
+    info(`Purchasing ${formatPhone(chosen.number)}...`);
+
+    const result = await buyTwilioNumber(sid, token, chosen.number, "");
+    for (const ch of ["sms", "whatsapp", "voice"] as ChannelType[]) {
+      await saveCredential(ch, "phone_number", result.number);
+    }
+    success(`Purchased: ${formatPhone(result.number)}`);
+    return result.number;
+  } catch (err) {
+    error(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    return null;
+  }
 }
 
 // ── Email (SendGrid) ──
@@ -315,5 +420,153 @@ export async function setupEmail(rl: RL): Promise<boolean> {
     await saveCredential("email", "from_email", fromEmail);
     success(`Sender: ${fromEmail}`);
   }
+  return true;
+}
+
+// ── Slack (OAuth + Manifest) ──
+
+export async function setupSlackOAuth(
+  rl: RL,
+  agentName: string,
+): Promise<boolean> {
+  // Check existing credentials
+  const existingToken = await getCredential("slack", "bot_token");
+  if (existingToken) {
+    info("Found existing Slack bot token. Validating...");
+    try {
+      const res = await fetch("https://slack.com/api/auth.test", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${existingToken}` },
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        team?: string;
+        user?: string;
+        error?: string;
+      };
+      if (data.ok) {
+        success(`Slack already connected: ${data.team} as ${data.user}`);
+        return true;
+      }
+      warn(`Saved token is invalid (${data.error}). Re-configuring...`);
+    } catch {
+      warn("Could not validate saved token. Re-configuring...");
+    }
+  }
+
+  info(`Creating Slack app "${agentName}"...`);
+
+  // Path 1: User has a Slack configuration token (apps.manifest.create)
+  const configToken = await ask(
+    rl,
+    "Slack config token (xoxe-...) or Enter to use OAuth:",
+  );
+
+  if (configToken) {
+    try {
+      const manifest = buildSlackManifest(agentName, `${agentName} agent`);
+      info("Creating app via Slack Manifest API...");
+      const app = await createSlackApp(configToken, manifest);
+      success(`App created: ${app.appId}`);
+
+      await saveCredential("slack", "app_id", app.appId);
+      await saveCredential("slack", "client_id", app.clientId);
+      await saveCredential("slack", "client_secret", app.clientSecret);
+
+      // Now do OAuth to install to workspace
+      info("Opening browser to install app to your workspace...");
+      const redirectUri = "http://localhost:7891/callback";
+      const scopes =
+        "chat:write,channels:read,im:read,im:write,im:history,users:read";
+      const authorizeUrl = `https://slack.com/oauth/v2/authorize?client_id=${app.clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+      const oauthResult = await startOAuthFlow({
+        authorizeUrl,
+        port: 7891,
+        timeout: 120_000,
+      });
+
+      const tokenResult = await exchangeSlackCode(
+        app.clientId,
+        app.clientSecret,
+        oauthResult.code,
+        redirectUri,
+      );
+
+      await saveCredential("slack", "bot_token", tokenResult.botToken);
+      await saveCredential("slack", "team_id", tokenResult.teamId);
+      await saveCredential("slack", "team_name", tokenResult.teamName);
+      success(`Slack app installed in workspace: ${tokenResult.teamName}`);
+      return true;
+    } catch (err) {
+      error(
+        `Manifest creation failed: ${err instanceof Error ? err.message : "unknown"}`,
+      );
+      info("Falling back to manual setup...");
+    }
+  }
+
+  // Path 2: Manual setup (existing flow as fallback)
+  return setupSlack(rl);
+}
+
+// ── Telegram (Improved Guided Setup) ──
+
+export async function setupTelegramGuided(
+  rl: RL,
+  agentName: string,
+): Promise<boolean> {
+  // Check existing credentials
+  const existing = await getCredential("telegram", "bot_token");
+  if (existing) {
+    info("Found existing Telegram bot token. Validating...");
+    const result = await validateTelegramToken(existing);
+    if (result.ok) {
+      success(`Telegram bot: @${result.username} (${result.displayName})`);
+      return true;
+    }
+    warn("Saved token is invalid. Setting up a new bot...");
+  }
+
+  // Open BotFather deep link (works on desktop Telegram)
+  info("Opening BotFather in Telegram...");
+  openBrowser("https://t.me/BotFather?start=");
+
+  const botUsername = `${agentName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_bot`;
+
+  box(
+    "Telegram Bot Setup",
+    [
+      "Copy-paste these messages to BotFather:",
+      "",
+      chalk.bold("Step 1:") + " Send:",
+      chalk.cyan("  /newbot"),
+      "",
+      chalk.bold("Step 2:") + " Send the display name:",
+      chalk.cyan(`  ${agentName}`),
+      "",
+      chalk.bold("Step 3:") + " Send the username:",
+      chalk.cyan(`  ${botUsername}`),
+      "",
+      chalk.dim("BotFather will reply with a token like:"),
+      chalk.dim("7123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PA"),
+    ].join("\n"),
+  );
+
+  const token = await ask(rl, "Paste your bot token:");
+  if (!token) {
+    warn("No token provided. Skipping.");
+    return false;
+  }
+
+  info("Validating via /getMe...");
+  const result = await validateTelegramToken(token);
+  if (!result.ok) {
+    error(`Invalid token: ${result.error}`);
+    return false;
+  }
+
+  await saveCredential("telegram", "bot_token", token);
+  success(`Connected to @${result.username} (${result.displayName})`);
   return true;
 }

@@ -1,92 +1,301 @@
 import { resolve } from "node:path";
+import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import { exec } from "node:child_process";
+import { platform } from "node:os";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import chalk from "chalk";
 import { parseIdentity, writeIdentity } from "../lib/identity.js";
 import { ensureConfigDir, saveConfig } from "../lib/config.js";
-import { saveCredential } from "../lib/credentials.js";
-import { banner, success, info, error, heading, box } from "../lib/ui.js";
+import {
+  saveCredential,
+  getCredential,
+  listConfiguredChannels,
+} from "../lib/credentials.js";
+import { banner, success, info, error, warn, heading, box } from "../lib/ui.js";
 import {
   DEFAULT_IDENTITY_FILE,
+  CREDENTIALS_DIR,
   CHANNEL_DISPLAY_NAMES,
+  FREE_CHANNELS,
 } from "../lib/constants.js";
 import type { ChannelType, Identity } from "../adapters/types.js";
 import { AgentDialConfigSchema } from "../adapters/types.js";
-import { existsSync } from "node:fs";
-
-// ── Channel metadata ──
-
-type Cred = { key: string; prompt: string; secret?: boolean };
-
-interface ChannelMeta {
-  key: ChannelType;
-  display: string;
-  free: boolean;
-  cost: string;
-  time: string;
-  credentials: Cred[];
-  comingSoon?: boolean;
-}
-
-const TWILIO_CREDS: Cred[] = [
-  { key: "account_sid", prompt: "Paste your Twilio Account SID:" },
-  { key: "auth_token", prompt: "Paste your Twilio Auth Token:", secret: true },
-  { key: "phone_number", prompt: "Paste your Twilio Phone Number:" },
-];
-
-/* prettier-ignore */
-const CHANNEL_MENU: ChannelMeta[] = [
-  // Free channels
-  { key: "telegram",  display: "Telegram Bot",       free: true,  cost: "free",             time: "2 min",  credentials: [{ key: "bot_token", prompt: "Paste your Bot Token from @BotFather:", secret: true }] },
-  { key: "discord",   display: "Discord Bot",        free: true,  cost: "free",             time: "3 min",  credentials: [{ key: "bot_token", prompt: "Paste your Bot Token from Discord Developer Portal:", secret: true }] },
-  { key: "web",       display: "Web Widget",         free: true,  cost: "free",             time: "1 min",  credentials: [] },
-  // Paid channels
-  { key: "sms",       display: "SMS (Twilio)",       free: false, cost: "$1.15/mo",         time: "5 min",  credentials: TWILIO_CREDS },
-  { key: "whatsapp",  display: "WhatsApp (Twilio)",  free: false, cost: "$5/mo via Twilio", time: "10 min", credentials: TWILIO_CREDS },
-  { key: "email",     display: "Email (SendGrid)",   free: false, cost: "free tier: 100/day", time: "3 min", credentials: [{ key: "api_key", prompt: "Paste your SendGrid API Key:", secret: true }, { key: "from_email", prompt: "Sender email address:" }] },
-  { key: "voice",     display: "Voice (Twilio)",     free: false, cost: "$0.05/min",        time: "5 min",  credentials: TWILIO_CREDS },
-  { key: "slack",     display: "Slack App",          free: false, cost: "free tier",        time: "5 min",  credentials: [{ key: "bot_token", prompt: "Paste your Slack Bot Token (xoxb-...):", secret: true }, { key: "app_token", prompt: "Paste your Slack App Token (xapp-...):", secret: true }] },
-  { key: "teams",     display: "Microsoft Teams",    free: false, cost: "free",             time: "10 min", credentials: [{ key: "app_id", prompt: "Paste your Teams App ID:" }, { key: "app_password", prompt: "Paste your Teams App Password:", secret: true }], comingSoon: true },
-  { key: "messenger", display: "Facebook Messenger", free: false, cost: "free",             time: "10 min", credentials: [{ key: "page_token", prompt: "Paste your Page Access Token:", secret: true }, { key: "verify_token", prompt: "Choose a Verify Token string:" }], comingSoon: true },
-];
+import {
+  validateTwilioAccount,
+  searchTwilioNumbers,
+  buyTwilioNumber,
+  formatPhone,
+  validateTelegramToken,
+} from "../lib/provisioning.js";
+import {
+  setupSlackOAuth,
+  setupTelegramGuided,
+  setupDiscord,
+  setupEmail,
+} from "./channel-flows.js";
 
 // ── Helpers ──
 
-async function ask(
-  rl: ReturnType<typeof createInterface>,
-  prompt: string,
-  fallback?: string,
-): Promise<string> {
+type RL = ReturnType<typeof createInterface>;
+
+async function ask(rl: RL, prompt: string, fallback?: string): Promise<string> {
   const suffix = fallback ? ` (${fallback})` : "";
   const answer = (await rl.question(`  ${prompt}${suffix} `)).trim();
   return answer || fallback || "";
 }
 
-function formatChannelLine(idx: number, ch: ChannelMeta): string {
-  const num = String(idx + 1).padStart(2);
-  if (ch.comingSoon) {
-    return `  ${num}) ${ch.display.padEnd(22)} (Coming Soon)`;
-  }
-  const cost = ch.free ? "free" : ch.cost;
-  return `  ${num}) ${ch.display.padEnd(22)} (${cost}, ${ch.time} setup)`;
+async function confirm(
+  rl: RL,
+  prompt: string,
+  defaultYes = true,
+): Promise<boolean> {
+  const hint = defaultYes ? "(Y/n)" : "(y/N)";
+  const answer = (await rl.question(`  ${prompt} ${hint} `))
+    .trim()
+    .toLowerCase();
+  if (!answer) return defaultYes;
+  return answer.startsWith("y");
 }
 
-// ── Main ──
+function openBrowser(url: string): void {
+  const cmd = platform() === "darwin" ? "open" : "xdg-open";
+  exec(`${cmd} "${url}"`, () => {
+    /* intentionally silent */
+  });
+}
+
+// ── Twilio Auto-Provision ──
+
+async function provisionTwilio(
+  rl: RL,
+  agentUrl: string,
+): Promise<string | null> {
+  const sid = await getCredential("sms", "account_sid");
+  const token = await getCredential("sms", "auth_token");
+
+  if (sid && token) {
+    info("Found existing Twilio credentials.");
+    const validation = await validateTwilioAccount(sid, token);
+    if (!validation.ok) {
+      error(`Twilio credentials invalid: ${validation.error}`);
+      return null;
+    }
+    success(`Twilio account: ${validation.name} (${validation.status})`);
+  } else {
+    heading("Twilio Setup");
+    info("To get SMS + Voice + WhatsApp, you need a Twilio account.");
+    info("Sign up at twilio.com/try-twilio (free trial includes $15 credit)");
+    console.log("");
+
+    if (await confirm(rl, "Open Twilio signup page?")) {
+      openBrowser("https://www.twilio.com/try-twilio");
+    }
+    console.log("");
+
+    const newSid = await ask(rl, "Paste your Account SID (AC...):");
+    if (!newSid) return null;
+    const newToken = await ask(rl, "Paste your Auth Token:");
+    if (!newToken) return null;
+
+    info("Validating...");
+    const validation = await validateTwilioAccount(newSid, newToken);
+    if (!validation.ok) {
+      error(`Invalid credentials: ${validation.error}`);
+      return null;
+    }
+    success(`Account: ${validation.name} (${validation.status})`);
+
+    // Save for all Twilio channels
+    for (const ch of ["sms", "whatsapp", "voice"] as ChannelType[]) {
+      await saveCredential(ch, "account_sid", newSid);
+      await saveCredential(ch, "auth_token", newToken);
+    }
+    return await buyNumber(rl, newSid, newToken, agentUrl);
+  }
+
+  // Credentials exist — check for existing phone number
+  const existingPhone = await getCredential("sms", "phone_number");
+  if (existingPhone) {
+    success(`Phone number already configured: ${formatPhone(existingPhone)}`);
+    return existingPhone;
+  }
+
+  // Offer to buy
+  if (await confirm(rl, "Buy a phone number? ($1.15/mo)")) {
+    return await buyNumber(rl, sid!, token!, agentUrl);
+  }
+  return null;
+}
+
+async function buyNumber(
+  rl: RL,
+  sid: string,
+  token: string,
+  agentUrl: string,
+): Promise<string | null> {
+  info("Searching for available numbers...");
+  try {
+    const numbers = await searchTwilioNumbers(sid, token, { limit: 5 });
+    if (numbers.length === 0) {
+      error("No numbers available. Try again or buy manually at twilio.com.");
+      return null;
+    }
+
+    console.log("");
+    info("Available numbers:");
+    for (let i = 0; i < numbers.length; i++) {
+      const n = numbers[i]!;
+      const caps = n.capabilities.join(", ");
+      console.log(`    ${i + 1}) ${formatPhone(n.number)}  [${caps}]`);
+    }
+    console.log("");
+
+    const pick = await ask(
+      rl,
+      "Pick a number (1-" + numbers.length + "):",
+      "1",
+    );
+    const idx = parseInt(pick, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= numbers.length) {
+      error("Invalid selection.");
+      return null;
+    }
+
+    const chosen = numbers[idx]!;
+    info(`Purchasing ${formatPhone(chosen.number)}...`);
+
+    const webhookBase = agentUrl.replace(/\/api\/chat\/?$/, "");
+    const result = await buyTwilioNumber(
+      sid,
+      token,
+      chosen.number,
+      webhookBase,
+    );
+
+    // Save phone number for all Twilio channels
+    for (const ch of ["sms", "whatsapp", "voice"] as ChannelType[]) {
+      await saveCredential(ch, "phone_number", result.number);
+    }
+
+    success(`Number purchased: ${formatPhone(result.number)}`);
+    info(`SMS webhook:   ${result.smsWebhook}`);
+    info(`Voice webhook: ${result.voiceWebhook}`);
+    return result.number;
+  } catch (err) {
+    error(
+      `Purchase failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+    );
+    return null;
+  }
+}
+
+// ── Smart Credential Detection ──
+
+interface DetectedChannel {
+  channel: ChannelType;
+  source: string; // "credentials" | "env" | ".env"
+  detail: string; // e.g. phone number, bot username
+}
+
+async function detectExistingChannels(): Promise<DetectedChannel[]> {
+  const found: DetectedChannel[] = [];
+
+  // Check ~/.agentdial/credentials/
+  const configured = await listConfiguredChannels();
+  for (const ch of configured) {
+    if (ch === "sms") {
+      const phone = await getCredential("sms", "phone_number");
+      const sid = await getCredential("sms", "account_sid");
+      if (sid) {
+        const detail = phone ? formatPhone(phone) : "no number yet";
+        found.push({ channel: "sms", source: "credentials", detail });
+        // Twilio credentials are shared — check for whatsapp and voice too
+        if (!found.some((f) => f.channel === "whatsapp")) {
+          found.push({ channel: "whatsapp", source: "credentials", detail });
+        }
+        if (!found.some((f) => f.channel === "voice")) {
+          found.push({ channel: "voice", source: "credentials", detail });
+        }
+      }
+    } else if (ch === "whatsapp" || ch === "voice") {
+      // Already handled above via sms
+      continue;
+    } else if (ch === "telegram") {
+      const token = await getCredential("telegram", "bot_token");
+      if (token) {
+        const result = await validateTelegramToken(token);
+        const detail = result.ok ? `@${result.username}` : "invalid token";
+        found.push({ channel: "telegram", source: "credentials", detail });
+      }
+    } else {
+      const keys = ch === "discord" ? "bot_token" : "bot_token";
+      const val = await getCredential(ch, keys);
+      if (val) {
+        found.push({
+          channel: ch,
+          source: "credentials",
+          detail: "configured",
+        });
+      }
+    }
+  }
+
+  // Check environment variables
+  const envMap: [string, ChannelType, string][] = [
+    ["TWILIO_ACCOUNT_SID", "sms", "Twilio"],
+    ["TELEGRAM_BOT_TOKEN", "telegram", "Telegram"],
+    ["DISCORD_BOT_TOKEN", "discord", "Discord"],
+    ["SLACK_BOT_TOKEN", "slack", "Slack"],
+    ["SENDGRID_API_KEY", "email", "SendGrid"],
+  ];
+
+  for (const [envVar, ch, label] of envMap) {
+    if (process.env[envVar] && !found.some((f) => f.channel === ch)) {
+      found.push({ channel: ch, source: "env", detail: `from $${envVar}` });
+    }
+  }
+
+  // Check .env file in cwd
+  const dotenvPath = join(process.cwd(), ".env");
+  if (existsSync(dotenvPath)) {
+    try {
+      const content = await readFile(dotenvPath, "utf-8");
+      for (const [envVar, ch, label] of envMap) {
+        if (
+          content.includes(`${envVar}=`) &&
+          !found.some((f) => f.channel === ch)
+        ) {
+          found.push({ channel: ch, source: ".env", detail: `from .env` });
+        }
+      }
+    } catch {
+      /* intentionally silent — .env read is best-effort */
+    }
+  }
+
+  return found;
+}
+
+// ── Main Setup ──
 
 export async function cmdSetup(opts: { file?: string }): Promise<void> {
   banner();
-  heading("Interactive Setup");
+  heading("Quick Setup");
+  info("One command. All channels. Your agent goes live in 60 seconds.");
 
   await ensureConfigDir();
 
   const identityPath = resolve(opts.file ?? DEFAULT_IDENTITY_FILE);
   let existingIdentity: Identity | null = null;
-
   if (existsSync(identityPath)) {
     try {
       existingIdentity = await parseIdentity(identityPath);
       info(`Found existing identity: ${existingIdentity.name}`);
     } catch {
-      // Corrupt file — we'll overwrite it
+      /* corrupt file — overwrite */
     }
   }
 
@@ -95,115 +304,121 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
   try {
     // ── Step 1: Agent basics ──
     heading("1/4  Agent Identity");
-
     const name = await ask(
       rl,
-      "What's your agent's name?",
+      "Agent name?",
       existingIdentity?.name ?? "Spark",
     );
     if (!name) {
       error("Agent name is required.");
       return;
     }
-
     const tagline = await ask(
       rl,
-      "What does your agent do? (tagline)",
+      "What does it do?",
       existingIdentity?.tagline ?? "An AI assistant",
     );
-
     const agentUrl = await ask(
       rl,
-      "Where is your agent's backend? (URL)",
+      "Agent backend URL?",
       existingIdentity?.agent_url ?? "http://localhost:3000/api/chat",
     );
 
-    // ── Step 2: Channel selection ──
-    heading("2/4  Select Channels");
-    console.log("");
-    console.log("  FREE CHANNELS:");
-    const freeChannels = CHANNEL_MENU.filter((c) => c.free);
-    const paidChannels = CHANNEL_MENU.filter((c) => !c.free);
+    // ── Step 2: Smart credential detection ──
+    heading("2/4  Detecting Existing Channels");
+    const detected = await detectExistingChannels();
+    const enabledChannels: ChannelType[] = ["web"];
 
-    for (let i = 0; i < freeChannels.length; i++) {
-      console.log(formatChannelLine(i, freeChannels[i]!));
-    }
-
-    console.log("");
-    console.log("  PAID CHANNELS:");
-    for (let i = 0; i < paidChannels.length; i++) {
-      console.log(formatChannelLine(freeChannels.length + i, paidChannels[i]!));
-    }
-    console.log("");
-
-    const allOrdered = [...freeChannels, ...paidChannels];
-    const selectionRaw = await ask(
-      rl,
-      "Enter channel numbers, comma-separated (e.g. 1,2,5):",
-      "1",
-    );
-
-    const selectedIndices = selectionRaw
-      .split(",")
-      .map((s) => parseInt(s.trim(), 10) - 1)
-      .filter((n) => !isNaN(n) && n >= 0 && n < allOrdered.length);
-
-    const selectedChannels = [...new Set(selectedIndices)]
-      .map((i) => allOrdered[i]!)
-      .filter((ch) => {
-        if (ch.comingSoon) {
-          info(`  ${ch.display} is coming soon — skipped.`);
-          return false;
+    if (detected.length > 0) {
+      info("Found existing credentials:");
+      for (const d of detected) {
+        const label = CHANNEL_DISPLAY_NAMES[d.channel] ?? d.channel;
+        success(`${label} (${d.detail})`);
+        if (!enabledChannels.includes(d.channel)) {
+          enabledChannels.push(d.channel);
         }
-        return true;
-      });
-
-    if (selectedChannels.length === 0) {
-      info(
-        "No channels selected. You can add them later with `agentdial channels add`.",
-      );
-    } else {
-      success(`Selected: ${selectedChannels.map((c) => c.display).join(", ")}`);
-    }
-
-    // ── Step 3: Channel credentials ──
-    const channelsWithCreds = selectedChannels.filter(
-      (c) => c.credentials.length > 0,
-    );
-
-    if (channelsWithCreds.length > 0) {
-      heading("3/4  Channel Credentials");
-      info("Credentials are stored locally in ~/.agentdial/credentials/");
+      }
       console.log("");
+    } else {
+      info("No existing credentials found. Let's set up channels.");
+    }
 
-      for (const channel of channelsWithCreds) {
-        console.log(
-          `  ${CHANNEL_DISPLAY_NAMES[channel.key] ?? channel.display}:`,
-        );
+    // ── Step 3: Configure unconfigured channels ──
+    heading("3/4  Channel Setup");
+    let phoneNumber: string | null = null;
 
-        for (const cred of channel.credentials) {
-          const value = await ask(rl, cred.prompt);
-          if (value) {
-            await saveCredential(channel.key, cred.key, value);
-          } else {
-            info(
-              `  Skipped ${cred.key} — set it later with \`agentdial channels add ${channel.key}\``,
-            );
-          }
+    // Check what's already configured
+    const hasTwilio = detected.some(
+      (d) => d.channel === "sms" || d.channel === "voice",
+    );
+    const hasTelegram = detected.some((d) => d.channel === "telegram");
+    const hasDiscord = detected.some((d) => d.channel === "discord");
+    const hasSlack = detected.some((d) => d.channel === "slack");
+    const hasEmail = detected.some((d) => d.channel === "email");
+
+    // Twilio (SMS + Voice + WhatsApp) — default Y
+    if (!hasTwilio) {
+      console.log("");
+      if (await confirm(rl, "Set up SMS, Voice & WhatsApp via Twilio?")) {
+        phoneNumber = await provisionTwilio(rl, agentUrl);
+        if (phoneNumber) {
+          enabledChannels.push("sms", "voice", "whatsapp");
+          console.log("");
+          success(
+            `3 channels live with one number: ${formatPhone(phoneNumber)}`,
+          );
         }
-        console.log("");
       }
     } else {
-      heading("3/4  Channel Credentials");
-      info("No credentials needed for selected channels.");
+      phoneNumber = (await getCredential("sms", "phone_number")) ?? null;
     }
 
-    // ── Step 4: Generate identity + config ──
-    heading("4/4  Saving Configuration");
+    // Telegram — default Y (free)
+    if (!hasTelegram) {
+      console.log("");
+      if (await confirm(rl, "Set up a Telegram bot? (free)")) {
+        if (await setupTelegramGuided(rl, name)) {
+          enabledChannels.push("telegram");
+        }
+      }
+    }
+
+    // Discord — default Y (free)
+    if (!hasDiscord) {
+      console.log("");
+      if (await confirm(rl, "Set up a Discord bot? (free)")) {
+        if (await setupDiscord(rl)) {
+          enabledChannels.push("discord");
+        }
+      }
+    }
+
+    // Slack — default N (requires app creation)
+    if (!hasSlack) {
+      console.log("");
+      if (await confirm(rl, "Set up a Slack app?", false)) {
+        if (await setupSlackOAuth(rl, name)) {
+          enabledChannels.push("slack");
+        }
+      }
+    }
+
+    // Email — default N
+    if (!hasEmail) {
+      console.log("");
+      if (await confirm(rl, "Set up email via SendGrid?", false)) {
+        if (await setupEmail(rl)) {
+          enabledChannels.push("email");
+        }
+      }
+    }
+
+    // ── Step 4: Save everything ──
+    heading("4/4  Saving");
 
     const channelsMap: Record<string, { enabled: boolean }> = {};
-    for (const ch of selectedChannels) {
-      channelsMap[ch.key] = { enabled: true };
+    for (const ch of [...new Set(enabledChannels)]) {
+      channelsMap[ch] = { enabled: true };
     }
 
     const identity: Identity = {
@@ -224,27 +439,37 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
     await saveConfig(config);
     success("Config saved to ~/.agentdial/config.json");
 
-    // ── Summary ──
-    console.log("");
-    const enabledNames = selectedChannels.map((c) => c.display);
-    const channelLine =
-      enabledNames.length > 0
-        ? `${enabledNames.length} channels enabled: ${enabledNames.join(", ")}`
-        : "No channels enabled yet";
+    // ── Summary — complete identity with all live channels ──
+    const unique = [...new Set(enabledChannels)];
+    const channelLines = unique.map((ch) => {
+      const label = CHANNEL_DISPLAY_NAMES[ch] ?? ch;
+      const isFree = FREE_CHANNELS.has(ch);
+      return `  ${chalk.green("\u2713")} ${label}${isFree ? chalk.dim(" (free)") : ""}`;
+    });
 
-    box(
-      "Setup Complete",
-      [
-        `Agent "${name}" configured!`,
-        channelLine,
-        `IDENTITY.md created at ${identityPath}`,
-        "",
-        "Next steps:",
-        "  agentdial test    -- send a test message",
-        "  agentdial serve   -- start the gateway",
-        "  agentdial status  -- view your identity",
-      ].join("\n"),
+    const summaryLines = [
+      chalk.bold(`"${name}"`),
+      tagline ? chalk.dim(tagline) : "",
+      "",
+      `${unique.length} channel${unique.length > 1 ? "s" : ""} live:`,
+      ...channelLines,
+    ];
+
+    if (phoneNumber) {
+      summaryLines.push("", chalk.bold(`Phone: ${formatPhone(phoneNumber)}`));
+      summaryLines.push(chalk.dim("Text it to say hello!"));
+    }
+
+    summaryLines.push(
+      "",
+      "Next:",
+      "  agentdial serve   -- start the gateway",
+      "  agentdial test    -- send a test message",
+      "  agentdial status  -- view your identity",
     );
+
+    console.log("");
+    box("Setup Complete", summaryLines.filter(Boolean).join("\n"));
   } finally {
     rl.close();
   }

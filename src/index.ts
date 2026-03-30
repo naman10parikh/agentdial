@@ -18,6 +18,17 @@ program
     }
   });
 
+// ── Quickstart ──
+
+program
+  .command("quickstart")
+  .description("Zero to hero — API key to live agent in 90 seconds")
+  .option("-f, --file <path>", "Path to IDENTITY.md file")
+  .action(async (opts: { file?: string }) => {
+    const { cmdQuickstart } = await import("./commands/quickstart.js");
+    await cmdQuickstart(opts);
+  });
+
 // ── Setup ──
 
 program

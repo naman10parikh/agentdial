@@ -32,18 +32,49 @@ interface RawChannelMessage {
 }
 
 export function normalizeMessage(
-  raw: RawChannelMessage,
+  raw: Record<string, unknown>,
   channel: ChannelType,
 ): GatewayMessage {
-  const text = raw.text ?? raw.content ?? raw.body ?? raw.message ?? "";
-  const from = raw.from ?? raw.sender ?? raw.userId ?? raw.user_id ?? "unknown";
+  // Handle Telegram nested format: { update_id, message: { text, from, chat } }
+  const telegramMsg =
+    raw.message && typeof raw.message === "object"
+      ? (raw.message as Record<string, unknown>)
+      : null;
+
+  const text =
+    (telegramMsg?.text as string) ??
+    (raw.text as string) ??
+    (raw.content as string) ??
+    (raw.body as string) ??
+    (typeof raw.message === "string" ? raw.message : "") ??
+    "";
+
+  // Telegram: from is nested in message.from.id or message.chat.id
+  const telegramFrom = telegramMsg?.from as Record<string, unknown> | undefined;
+  const telegramChat = telegramMsg?.chat as Record<string, unknown> | undefined;
+  const from =
+    (telegramFrom?.id != null ? String(telegramFrom.id) : null) ??
+    (telegramChat?.id != null ? String(telegramChat.id) : null) ??
+    (raw.from as string) ??
+    (raw.sender as string) ??
+    (raw.userId as string) ??
+    (raw.user_id as string) ??
+    "unknown";
   const threadId =
-    raw.threadId ?? raw.thread_id ?? raw.chatId ?? raw.chat_id ?? undefined;
+    (raw.threadId as string) ??
+    (raw.thread_id as string) ??
+    (raw.chatId as string) ??
+    (raw.chat_id as string) ??
+    undefined;
   const timestamp =
-    raw.timestamp ?? raw.date ?? parseSlackTs(raw.ts) ?? Date.now();
+    (raw.timestamp as number) ??
+    (raw.date as number) ??
+    (telegramMsg?.date as number) ??
+    parseSlackTs(raw.ts as string | undefined) ??
+    Date.now();
 
   const msg: GatewayMessage = {
-    id: raw.nativeId ?? randomUUID(),
+    id: (raw.nativeId as string) ?? randomUUID(),
     channel,
     from: String(from),
     text: String(text),

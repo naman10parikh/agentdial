@@ -117,7 +117,9 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async setup(config: ChannelConfig): Promise<void> {
-    const token = config.credentials?.["bot_token"];
+    const token =
+      config.credentials?.["bot_token"] ??
+      (await getCredential("telegram", "bot_token"));
     if (!token)
       throw new Error(
         "Missing credential: bot_token. Get one from @BotFather on Telegram.",

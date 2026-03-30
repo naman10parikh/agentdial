@@ -190,8 +190,19 @@ export async function cmdServe(opts: {
         const response = await getResponse(msg);
         const formatted = formatResponse(response, channel);
 
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(formatted.payload));
+        // Telegram webhook responses need method + chat_id to send reply
+        if (channel === "telegram") {
+          const payload = {
+            method: "sendMessage",
+            chat_id: msg.from,
+            ...formatted.payload,
+          };
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(payload));
+        } else {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(formatted.payload));
+        }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         const status = errMsg === "Payload Too Large" ? 413 : 500;

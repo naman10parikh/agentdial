@@ -185,21 +185,33 @@ export async function cmdServe(opts: {
       try {
         const rawBody = await readBody(req);
 
-        // Webhook signature validation
-        const rejected = await validateWebhook(channel, req, rawBody, port);
-        if (rejected) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(
-            JSON.stringify({ error: "Forbidden: invalid webhook signature" }),
-          );
-          return;
-        }
-
         // Parse body based on content-type (Twilio sends form-encoded, not JSON)
         const contentType = req.headers["content-type"] ?? "";
         const isFormEncoded = contentType.includes(
           "application/x-www-form-urlencoded",
         );
+
+        // Detect alternate providers BEFORE Twilio signature validation.
+        // VAPI sends JSON to /webhook/voice; AgentMail sends JSON to /webhook/email.
+        // These don't use Twilio signatures and must be handled first.
+        const isAlternateProvider =
+          !isFormEncoded &&
+          ((channel === "voice" && rawBody.includes('"message"')) ||
+            (channel === "email" && rawBody.includes('"inbox_id"')));
+
+        // Webhook signature validation (skip for alternate JSON providers)
+        if (!isAlternateProvider) {
+          const rejected = await validateWebhook(channel, req, rawBody, port);
+          if (rejected) {
+            res.writeHead(403, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "Forbidden: invalid webhook signature",
+              }),
+            );
+            return;
+          }
+        }
         const raw: Record<string, unknown> = isFormEncoded
           ? parseFormParams(rawBody)
           : (JSON.parse(rawBody) as Record<string, unknown>);
@@ -286,6 +298,15 @@ export async function cmdServe(opts: {
           };
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify(payload));
+        } else if (channel === "sms" || channel === "whatsapp") {
+          // Twilio expects TwiML XML responses for SMS and WhatsApp
+          const escaped = response.text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escaped}</Message></Response>`;
+          res.writeHead(200, { "Content-Type": "text/xml" });
+          res.end(twiml);
         } else {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify(formatted.payload));

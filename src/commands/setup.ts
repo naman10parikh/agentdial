@@ -14,6 +14,11 @@ import {
   getCredential,
   listConfiguredChannels,
 } from "../lib/credentials.js";
+import {
+  BuiltInAgent,
+  saveAgentConfig,
+  loadAgentConfig,
+} from "../lib/built-in-agent.js";
 import { banner, success, info, error, warn, heading, box } from "../lib/ui.js";
 import {
   DEFAULT_IDENTITY_FILE,
@@ -303,7 +308,7 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
 
   try {
     // ── Step 1: Agent basics ──
-    heading("1/4  Agent Identity");
+    heading("1/5  Agent Identity");
     const name = await ask(
       rl,
       "Agent name?",
@@ -318,14 +323,74 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
       "What does it do?",
       existingIdentity?.tagline ?? "An AI assistant",
     );
-    const agentUrl = await ask(
-      rl,
-      "Agent backend URL?",
-      existingIdentity?.agent_url ?? "http://localhost:3000/api/chat",
-    );
 
-    // ── Step 2: Smart credential detection ──
-    heading("2/4  Detecting Existing Channels");
+    // ── Step 2: Backend selection ──
+    heading("2/5  Agent Backend");
+    const existingAgent = await loadAgentConfig();
+    let agentUrl: string | undefined;
+    let builtInConfigured = false;
+
+    console.log("  Backend:");
+    console.log("    1. Built-in agent (just paste an API key)");
+    console.log("    2. Connect to your own backend (URL)");
+    const backendChoice = await ask(rl, ">", existingAgent ? "1" : "1");
+
+    if (backendChoice === "2") {
+      agentUrl = await ask(
+        rl,
+        "Agent backend URL?",
+        existingIdentity?.agent_url ?? "http://localhost:3000/api/chat",
+      );
+    } else {
+      // Built-in agent setup
+      console.log("");
+      console.log("  Provider:");
+      console.log("    1. Anthropic (Claude)");
+      console.log("    2. OpenAI (GPT)");
+      const providerChoice = await ask(
+        rl,
+        ">",
+        existingAgent?.provider === "openai" ? "2" : "1",
+      );
+      const provider = providerChoice === "2" ? "openai" : "anthropic";
+
+      const envKey =
+        provider === "anthropic"
+          ? process.env["ANTHROPIC_API_KEY"]
+          : process.env["OPENAI_API_KEY"];
+      const keyHint = envKey ? "(found in env)" : "";
+
+      const apiKey = await ask(
+        rl,
+        `${provider === "anthropic" ? "Anthropic" : "OpenAI"} API key? ${keyHint}`,
+        envKey ?? existingAgent?.apiKey,
+      );
+
+      if (!apiKey) {
+        error("API key is required for built-in agent.");
+        return;
+      }
+
+      info("Validating API key...");
+      const validation = await BuiltInAgent.validateKey(provider, apiKey);
+      if (!validation.valid) {
+        error(`Invalid key: ${validation.error ?? "unknown error"}`);
+        return;
+      }
+      success(`Key valid! Model: ${validation.model ?? "default"}`);
+
+      await saveAgentConfig({
+        provider: provider as "anthropic" | "openai",
+        apiKey,
+        model: validation.model,
+        systemPrompt: "", // Will be loaded from IDENTITY.md at runtime
+      });
+      builtInConfigured = true;
+      success("Agent config saved.");
+    }
+
+    // ── Step 3: Smart credential detection ──
+    heading("3/5  Detecting Existing Channels");
     const detected = await detectExistingChannels();
     const enabledChannels: ChannelType[] = ["web"];
 
@@ -343,8 +408,8 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
       info("No existing credentials found. Let's set up channels.");
     }
 
-    // ── Step 3: Configure unconfigured channels ──
-    heading("3/4  Channel Setup");
+    // ── Step 4: Configure unconfigured channels ──
+    heading("4/5  Channel Setup");
     let phoneNumber: string | null = null;
 
     // Check what's already configured
@@ -360,7 +425,10 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
     if (!hasTwilio) {
       console.log("");
       if (await confirm(rl, "Set up SMS, Voice & WhatsApp via Twilio?")) {
-        phoneNumber = await provisionTwilio(rl, agentUrl);
+        phoneNumber = await provisionTwilio(
+          rl,
+          agentUrl ?? "http://localhost:3141",
+        );
         if (phoneNumber) {
           enabledChannels.push("sms", "voice", "whatsapp");
           console.log("");
@@ -413,8 +481,8 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
       }
     }
 
-    // ── Step 4: Save everything ──
-    heading("4/4  Saving");
+    // ── Step 5: Save everything ──
+    heading("5/5  Saving");
 
     const channelsMap: Record<string, { enabled: boolean }> = {};
     for (const ch of [...new Set(enabledChannels)]) {
@@ -438,6 +506,12 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
     });
     await saveConfig(config);
     success("Config saved to ~/.agentdial/config.json");
+
+    if (builtInConfigured) {
+      success(
+        "Built-in agent configured (API key saved to ~/.agentdial/agent.json)",
+      );
+    }
 
     // ── Summary — complete identity with all live channels ──
     const unique = [...new Set(enabledChannels)];

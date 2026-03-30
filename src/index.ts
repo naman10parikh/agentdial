@@ -121,10 +121,18 @@ program
   .option("-p, --port <port>", "Gateway port", "3141")
   .option("-a, --agent-url <url>", "Agent backend URL")
   .option("-f, --file <path>", "Path to IDENTITY.md file")
-  .action(async (opts: { port: string; agentUrl?: string; file?: string }) => {
-    const { cmdServe } = await import("./commands/serve.js");
-    await cmdServe(opts);
-  });
+  .option("-t, --tunnel", "Start a public tunnel for webhooks")
+  .action(
+    async (opts: {
+      port: string;
+      agentUrl?: string;
+      file?: string;
+      tunnel?: boolean;
+    }) => {
+      const { cmdServe } = await import("./commands/serve.js");
+      await cmdServe(opts);
+    },
+  );
 
 // ── MCP Serve ──
 

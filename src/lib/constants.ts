@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const VERSION = "1.2.0";
+export const VERSION = "1.2.1";
 
 export const CONFIG_DIR = join(homedir(), ".agentdial");
 export const CONFIG_FILE = join(CONFIG_DIR, "config.json");

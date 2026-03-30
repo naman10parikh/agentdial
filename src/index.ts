@@ -134,6 +134,64 @@ program
     },
   );
 
+// ── Recipes ──
+
+const recipes = program
+  .command("recipes")
+  .description(
+    "Per-platform setup recipes with friction tiers and verification",
+  );
+
+recipes.action(async () => {
+  const { cmdRecipes } = await import("./commands/recipes.js");
+  await cmdRecipes();
+});
+
+recipes
+  .command("run <channel>")
+  .description("Run a recipe for a specific channel (telegram, discord, ...)")
+  .action(async (channel: string) => {
+    const { cmdRecipesRun } = await import("./commands/recipes.js");
+    await cmdRecipesRun(channel);
+  });
+
+recipes
+  .command("verify")
+  .description("Verify all configured channels are working end-to-end")
+  .action(async () => {
+    const { cmdRecipesVerify } = await import("./commands/recipes.js");
+    await cmdRecipesVerify();
+  });
+
+// ── Auth ──
+
+program
+  .command("login")
+  .description("Authenticate with AgentDial via Clerk OAuth")
+  .option("--skip-provision", "Skip auto-provisioning channels after login")
+  .option("--clerk-url <url>", "Override Clerk frontend API URL")
+  .action(async (opts: { skipProvision?: boolean; clerkUrl?: string }) => {
+    const { cmdLogin } = await import("./commands/login.js");
+    await cmdLogin(opts);
+  });
+
+program
+  .command("logout")
+  .description("Clear stored authentication credentials")
+  .action(async () => {
+    const { cmdLogout } = await import("./commands/login.js");
+    await cmdLogout();
+  });
+
+program
+  .command("whoami")
+  .description("Show current authentication status")
+  .option("-j, --json", "Output as JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const { cmdWhoami } = await import("./commands/login.js");
+    await cmdWhoami(opts);
+  });
+
 // ── MCP Serve ──
 
 program

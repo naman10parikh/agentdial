@@ -3,7 +3,11 @@ import { stdin, stdout } from "node:process";
 import chalk from "chalk";
 import { ChannelTypeSchema } from "../adapters/types.js";
 import type { ChannelType } from "../adapters/types.js";
-import { listCredentials, listConfiguredChannels } from "../lib/credentials.js";
+import {
+  listCredentials,
+  listConfiguredChannels,
+  getCredential,
+} from "../lib/credentials.js";
 import { loadConfig, updateConfig } from "../lib/config.js";
 import { hasAdapter, getAdapter } from "../adapters/index.js";
 import { success, error, info, warn, heading, table } from "../lib/ui.js";
@@ -153,7 +157,17 @@ export async function cmdChannelTest(rawChannel?: string): Promise<void> {
 
     const adapter = getAdapter(channel);
     try {
-      await adapter.setup({ channel, enabled: true });
+      // Load saved credentials from file to pass to setup
+      const credentialMap: Record<string, string> = {};
+      for (const key of creds) {
+        const val = await getCredential(channel, key);
+        if (val) credentialMap[key] = val;
+      }
+      await adapter.setup({
+        channel,
+        enabled: true,
+        credentials: credentialMap,
+      });
       const result = await adapter.test();
       if (result.ok) {
         success(`${CHANNEL_DISPLAY_NAMES[channel] ?? channel}: connected`);
@@ -206,7 +220,16 @@ export async function cmdChannelTest(rawChannel?: string): Promise<void> {
 
     const adapter = getAdapter(ch);
     try {
-      await adapter.setup({ channel: ch, enabled: true });
+      const credentialMap: Record<string, string> = {};
+      for (const key of creds) {
+        const val = await getCredential(ch, key);
+        if (val) credentialMap[key] = val;
+      }
+      await adapter.setup({
+        channel: ch,
+        enabled: true,
+        credentials: credentialMap,
+      });
       const result = await adapter.test();
       if (result.ok) {
         rows.push({

@@ -1,6 +1,6 @@
 {
   "name": "agentdial",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Dial your AI agent into every platform. One identity. Every channel.",
   "type": "module",
   "bin": {
@@ -65,12 +65,12 @@
     "vitest": "^2.0.0"
   },
   "peerDependencies": {
-    "twilio": ">=4.0.0",
+    "@sendgrid/mail": ">=7.0.0",
+    "@slack/socket-mode": "2.0.6",
+    "@slack/web-api": "^7.15.0",
     "discord.js": ">=14.0.0",
-    "@slack/socket-mode": ">=2.0.0",
-    "@slack/web-api": ">=7.0.0",
     "node-telegram-bot-api": ">=0.60.0",
-    "@sendgrid/mail": ">=7.0.0"
+    "twilio": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "twilio": {

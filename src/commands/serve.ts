@@ -17,13 +17,23 @@ import { startTunnel } from "../lib/tunnel.js";
 import { banner, heading, success, error, info, warn } from "../lib/ui.js";
 import { DEFAULT_IDENTITY_FILE } from "../lib/constants.js";
 import { GatewayMessageSchema, ChannelTypeSchema } from "../adapters/types.js";
-import { getCredential } from "../lib/credentials.js";
+import { getCredential, listConfiguredChannels } from "../lib/credentials.js";
 import {
   validateTwilioSignature,
   validateSlackSignature,
   validateTelegramSecret,
 } from "../lib/webhook-validation.js";
-import type { ChannelType, GatewayResponse } from "../adapters/types.js";
+import type {
+  ChannelType,
+  GatewayMessage,
+  GatewayResponse,
+} from "../adapters/types.js";
+
+/** Channels that use WebSocket connections (not HTTP webhooks). */
+const WEBSOCKET_CHANNELS: ReadonlySet<ChannelType> = new Set([
+  "discord",
+  "slack",
+]);
 
 export async function cmdServe(opts: {
   port: string;
@@ -185,8 +195,85 @@ export async function cmdServe(opts: {
           return;
         }
 
-        const raw = JSON.parse(rawBody) as Record<string, unknown>;
+        // Parse body based on content-type (Twilio sends form-encoded, not JSON)
+        const contentType = req.headers["content-type"] ?? "";
+        const isFormEncoded = contentType.includes(
+          "application/x-www-form-urlencoded",
+        );
+        const raw: Record<string, unknown> = isFormEncoded
+          ? parseFormParams(rawBody)
+          : (JSON.parse(rawBody) as Record<string, unknown>);
+
+        // Voice channel — detect VAPI (JSON) vs Twilio (form-encoded TwiML)
+        if (channel === "voice") {
+          const isVapi =
+            !isFormEncoded &&
+            typeof raw["message"] === "object" &&
+            raw["message"] !== null &&
+            "type" in (raw["message"] as Record<string, unknown>);
+
+          if (isVapi) {
+            const vapiPayload =
+              raw as unknown as import("../adapters/voice-vapi.js").VapiWebhookPayload;
+            const { VapiVoiceAdapter } =
+              await import("../adapters/voice-vapi.js");
+            const vapiAdapter = new VapiVoiceAdapter();
+            vapiAdapter.onMessage(async (m) => getResponse(m));
+            const vapiResponse = await vapiAdapter.handleWebhook(vapiPayload);
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(vapiResponse ?? { ok: true }));
+            return;
+          }
+
+          // Twilio voice — form-encoded, expects TwiML XML
+          const msg = normalizeMessage(raw, channel);
+          const hasSpeech = Boolean(raw["SpeechResult"] || raw["Digits"]);
+
+          if (!hasSpeech) {
+            const webhookUrl = `${displayUrl}/webhook/voice`;
+            const greeting =
+              "Hello! I'm your AI agent. How can I help you today?";
+            const twiml = buildVoiceTwiml(webhookUrl, greeting);
+            res.writeHead(200, { "Content-Type": "text/xml" });
+            res.end(twiml);
+            return;
+          }
+
+          const response = await getResponse(msg);
+          const webhookUrl = `${displayUrl}/webhook/voice`;
+          const twiml = buildVoiceTwiml(webhookUrl, response.text);
+          res.writeHead(200, { "Content-Type": "text/xml" });
+          res.end(twiml);
+          return;
+        }
+
+        // Email channel — detect AgentMail webhook (has "event" + "inbox_id")
+        if (
+          channel === "email" &&
+          typeof raw["event"] === "string" &&
+          typeof raw["inbox_id"] === "string"
+        ) {
+          const amPayload =
+            raw as import("../adapters/email-agentmail.js").AgentMailWebhookPayload;
+          const { AgentMailAdapter } =
+            await import("../adapters/email-agentmail.js");
+          const amAdapter = new AgentMailAdapter();
+          amAdapter.onMessage(async (m) => getResponse(m));
+          const amResponse = await amAdapter.handleWebhook(amPayload);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(amResponse ?? { ok: true }));
+          return;
+        }
+
         const msg = normalizeMessage(raw, channel);
+
+        // Reject empty messages before hitting the API
+        if (!msg.text || msg.text.trim() === "") {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Message text is required" }));
+          return;
+        }
+
         const response = await getResponse(msg);
         const formatted = formatResponse(response, channel);
 
@@ -216,10 +303,46 @@ export async function cmdServe(opts: {
     if (req.url === "/message" && req.method === "POST") {
       try {
         const body = await readBody(req);
-        const raw = JSON.parse(body) as unknown;
-        const msg = GatewayMessageSchema.parse(raw);
-        const response = await getResponse(msg);
+        const raw = JSON.parse(body) as Record<string, unknown>;
 
+        // Accept both strict GatewayMessage and lenient { channel, text } shorthand
+        const strict = GatewayMessageSchema.safeParse(raw);
+        let msg: GatewayMessage;
+        if (strict.success) {
+          msg = strict.data;
+        } else {
+          // Require at minimum: text + channel
+          const text =
+            (raw.text as string) ??
+            (raw.message as string) ??
+            (raw.content as string);
+          if (!text) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error:
+                  'Missing required field "text". Send: { "channel": "web", "text": "Hello" }',
+              }),
+            );
+            return;
+          }
+          const channelResult = ChannelTypeSchema.safeParse(
+            raw.channel ?? "web",
+          );
+          msg = {
+            id: (raw.id as string) ?? crypto.randomUUID(),
+            channel: channelResult.success ? channelResult.data : "web",
+            from:
+              (raw.from as string) ??
+              (raw.senderId as string) ??
+              (raw.userId as string) ??
+              "anonymous",
+            text: String(text),
+            timestamp: (raw.timestamp as number) ?? Date.now(),
+          };
+        }
+
+        const response = await getResponse(msg);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(response));
       } catch (err) {
@@ -249,7 +372,77 @@ export async function cmdServe(opts: {
     info("  POST /message          — Send a normalized GatewayMessage");
     info("  POST /webhook/:channel — Channel-specific webhook");
     info("  GET  /health           — Health check");
+
+    // Auto-connect WebSocket-based adapters (Discord, Slack)
+    void connectWebSocketAdapters(getResponse);
+
+    // Auto-register webhooks for configured channels
+    if (tunnelUrl) {
+      void autoRegisterWebhooks(tunnelUrl);
+    }
   });
+}
+
+/**
+ * Connect WebSocket-based channel adapters that have saved credentials.
+ * These run alongside the HTTP webhook server.
+ */
+async function connectWebSocketAdapters(
+  getResponse: (msg: GatewayMessage) => Promise<GatewayResponse>,
+): Promise<void> {
+  const configured = await listConfiguredChannels();
+  const wsChannels = configured.filter((ch) => WEBSOCKET_CHANNELS.has(ch));
+
+  for (const channel of wsChannels) {
+    try {
+      if (channel === "discord") {
+        const token = await getCredential("discord", "bot_token");
+        if (!token) continue;
+
+        const { DiscordAdapter } = await import("../adapters/discord.js");
+        const adapter = new DiscordAdapter();
+        adapter.onMessage(async (msg) => getResponse(msg));
+        await adapter.setup({
+          channel: "discord",
+          enabled: true,
+          credentials: { bot_token: token },
+        });
+        await adapter.connect();
+        const status = await adapter.status();
+        if (status.connected) {
+          success("Discord bot connected (WebSocket)");
+        }
+      }
+
+      if (channel === "slack") {
+        const botToken = await getCredential("slack", "bot_token");
+        const appToken = await getCredential("slack", "app_token");
+        if (!botToken || !appToken) {
+          warn(
+            "Slack: need both bot_token (xoxb-) and app_token (xapp-) for Socket Mode",
+          );
+          continue;
+        }
+
+        const { SlackAdapter } = await import("../adapters/slack.js");
+        const adapter = new SlackAdapter();
+        adapter.onMessage(async (msg) => getResponse(msg));
+        await adapter.setup({
+          channel: "slack",
+          enabled: true,
+          credentials: { bot_token: botToken, app_token: appToken },
+        });
+        await adapter.connect();
+        const status = await adapter.status();
+        if (status.connected) {
+          success("Slack bot connected (Socket Mode)");
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warn(`${channel}: ${msg}`);
+    }
+  }
 }
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
@@ -367,4 +560,104 @@ async function validateWebhook(
   }
 
   return false;
+}
+
+/** Escape XML special characters for TwiML responses. */
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * Build TwiML that speaks a response and gathers the next speech input.
+ * This creates a conversational loop — after speaking, Twilio listens
+ * for more speech and POSTs back to the webhook URL.
+ */
+function buildVoiceTwiml(webhookUrl: string, sayText: string): string {
+  const action = webhookUrl ? ` action="${escapeXml(webhookUrl)}"` : "";
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    "<Response>",
+    `  <Gather input="speech" speechTimeout="auto"${action} method="POST">`,
+    `    <Say voice="Polly.Joanna">${escapeXml(sayText)}</Say>`,
+    "  </Gather>",
+    '  <Say voice="Polly.Joanna">I didn\'t hear anything. Goodbye.</Say>',
+    "</Response>",
+  ].join("\n");
+}
+
+/**
+ * Auto-register webhooks with all configured channels after tunnel starts.
+ */
+async function autoRegisterWebhooks(tunnelUrl: string): Promise<void> {
+  const configured = await listConfiguredChannels();
+
+  for (const channel of configured) {
+    try {
+      // Telegram: register webhook via Bot API
+      if (channel === "telegram") {
+        const token = await getCredential("telegram", "bot_token");
+        if (!token) continue;
+        const webhookUrl = `${tunnelUrl}/webhook/telegram`;
+        const res = await fetch(
+          `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`,
+        );
+        const data = (await res.json()) as {
+          ok: boolean;
+          description?: string;
+        };
+        if (data.ok) {
+          success(`Telegram webhook registered: ${webhookUrl}`);
+        } else {
+          warn(`Telegram webhook failed: ${data.description ?? "unknown"}`);
+        }
+      }
+
+      // Twilio SMS: configure webhook on phone number
+      if (channel === "sms") {
+        const sid = await getCredential("sms", "account_sid");
+        const token = await getCredential("sms", "auth_token");
+        const phone = await getCredential("sms", "phone_number");
+        if (!sid || !token || !phone) continue;
+        // Find the phone number SID
+        const auth = Buffer.from(`${sid}:${token}`).toString("base64");
+        const listRes = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phone)}`,
+          { headers: { Authorization: `Basic ${auth}` } },
+        );
+        const listData = (await listRes.json()) as {
+          incoming_phone_numbers?: Array<{ sid: string }>;
+        };
+        const numberSid = listData.incoming_phone_numbers?.[0]?.sid;
+        if (!numberSid) {
+          warn("SMS: could not find phone number SID for webhook registration");
+          continue;
+        }
+        const webhookUrl = `${tunnelUrl}/webhook/sms`;
+        const updateRes = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${numberSid}.json`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Basic ${auth}`,
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `SmsUrl=${encodeURIComponent(webhookUrl)}&VoiceUrl=${encodeURIComponent(`${tunnelUrl}/webhook/voice`)}`,
+          },
+        );
+        if (updateRes.ok) {
+          success(`Twilio webhooks registered: SMS + Voice → ${tunnelUrl}`);
+        } else {
+          warn(`Twilio webhook update failed: ${updateRes.statusText}`);
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warn(`Auto-webhook (${channel}): ${msg}`);
+    }
+  }
 }

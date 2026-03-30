@@ -43,6 +43,8 @@ export function normalizeMessage(
 
   const text =
     (telegramMsg?.text as string) ??
+    (raw.SpeechResult as string) ?? // Twilio voice transcription
+    (raw.Body as string) ?? // Twilio SMS/WhatsApp body
     (raw.text as string) ??
     (raw.content as string) ??
     (raw.body as string) ??
@@ -55,6 +57,7 @@ export function normalizeMessage(
   const from =
     (telegramFrom?.id != null ? String(telegramFrom.id) : null) ??
     (telegramChat?.id != null ? String(telegramChat.id) : null) ??
+    (raw.From as string) ?? // Twilio capital-F From
     (raw.from as string) ??
     (raw.sender as string) ??
     (raw.userId as string) ??

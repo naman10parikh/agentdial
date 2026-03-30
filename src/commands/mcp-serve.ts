@@ -156,6 +156,89 @@ const TOOLS = [
     description: "Stop the running gateway server.",
     inputSchema: { type: "object" as const, properties: {} },
   },
+  {
+    name: "recipe_list",
+    description:
+      "List all per-platform setup recipes with friction tier, cost, step count, and verification status.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "recipe_run",
+    description:
+      "Run a recipe for a specific channel. Executes automated steps and returns manual steps the user must complete.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        channel: {
+          type: "string",
+          description:
+            "Channel to run recipe for: telegram, discord, slack, sms, whatsapp, voice, email",
+        },
+      },
+      required: ["channel"],
+    },
+  },
+  {
+    name: "recipe_verify",
+    description:
+      "Verify all configured channels are working end-to-end by calling each platform's API.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        channel: {
+          type: "string",
+          description: "Verify a specific channel (omit to verify all)",
+        },
+      },
+    },
+  },
+  {
+    name: "auth_status",
+    description:
+      "Check if the user is authenticated with AgentDial. Returns session details including user ID, email, and managed accounts.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "auth_login",
+    description:
+      "Initiate Clerk OAuth login flow. Opens a browser for the user to authenticate. Returns session on success.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        clerk_url: {
+          type: "string",
+          description: "Override Clerk frontend API URL (optional)",
+        },
+        skip_provision: {
+          type: "boolean",
+          description: "Skip auto-provisioning channels after login",
+        },
+      },
+    },
+  },
+  {
+    name: "auth_logout",
+    description: "Clear stored authentication credentials.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "auth_provision",
+    description:
+      "Auto-provision channels for the authenticated user. Creates managed Twilio sub-accounts and AgentMail inboxes when master credentials are available.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        agent_name: {
+          type: "string",
+          description:
+            "Name for the agent (used in sub-account and inbox naming)",
+        },
+        skip_email: { type: "boolean", description: "Skip email provisioning" },
+        skip_phone: { type: "boolean", description: "Skip phone provisioning" },
+      },
+      required: ["agent_name"],
+    },
+  },
 ];
 
 // ── Gateway State ──
@@ -187,6 +270,20 @@ async function handleToolCall(
         return await handleGatewayStart(args);
       case "gateway_stop":
         return handleGatewayStop();
+      case "recipe_list":
+        return await handleRecipeList();
+      case "recipe_run":
+        return await handleRecipeRun(args);
+      case "recipe_verify":
+        return await handleRecipeVerify(args);
+      case "auth_status":
+        return await handleAuthStatus();
+      case "auth_login":
+        return await handleAuthLogin(args);
+      case "auth_logout":
+        return await handleAuthLogout();
+      case "auth_provision":
+        return await handleAuthProvision(args);
       default:
         return text(`Unknown tool: ${name}`);
     }
@@ -536,6 +633,144 @@ function handleGatewayStop(): ToolResult {
   gatewayServer = null;
   gatewayPort = null;
   return text(`Gateway stopped (was on port ${String(port)}).`);
+}
+
+// ── auth_status ──
+
+async function handleAuthStatus(): Promise<ToolResult> {
+  const { loadAuthSession, isAuthenticated } = await import("../lib/auth.js");
+  const session = await loadAuthSession();
+  if (!session) {
+    return text(JSON.stringify({ authenticated: false }, null, 2));
+  }
+  const active = await isAuthenticated();
+  return text(
+    JSON.stringify(
+      {
+        authenticated: active,
+        userId: session.userId,
+        email: session.email ?? null,
+        name: session.name ?? null,
+        expiresAt: session.expiresAt,
+        expired: !active,
+        managedAccounts: session.managedAccounts ?? null,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+// ── auth_login ──
+
+async function handleAuthLogin(
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const { login } = await import("../lib/auth.js");
+  const clerkUrl = args["clerk_url"] as string | undefined;
+  const loginOpts = clerkUrl ? { clerkConfig: { frontendApi: clerkUrl } } : {};
+
+  try {
+    const session = await login(loginOpts);
+    return text(
+      JSON.stringify(
+        {
+          ok: true,
+          userId: session.userId,
+          email: session.email ?? null,
+          name: session.name ?? null,
+          expiresAt: session.expiresAt,
+        },
+        null,
+        2,
+      ),
+    );
+  } catch (err) {
+    return text(
+      `Login failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+// ── auth_logout ──
+
+async function handleAuthLogout(): Promise<ToolResult> {
+  const { clearAuthSession, loadAuthSession } = await import("../lib/auth.js");
+  const session = await loadAuthSession();
+  if (!session) return text("Not logged in.");
+  await clearAuthSession();
+  return text(`Logged out ${session.name ?? session.email ?? session.userId}.`);
+}
+
+// ── auth_provision ──
+
+async function handleAuthProvision(
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const { autoProvision, loadAuthSession } = await import("../lib/auth.js");
+  const session = await loadAuthSession();
+  if (!session) return text("ERROR: Not authenticated. Use auth_login first.");
+
+  const agentName = (args["agent_name"] as string) ?? "Agent";
+  const skipEmail = (args["skip_email"] as boolean) ?? false;
+  const skipPhone = (args["skip_phone"] as boolean) ?? false;
+
+  try {
+    const result = await autoProvision({
+      userName: session.name ?? session.email ?? session.userId,
+      agentName,
+      twilioMasterSid: process.env["TWILIO_MASTER_SID"],
+      twilioMasterToken: process.env["TWILIO_MASTER_TOKEN"],
+      agentMailApiKey: process.env["AGENTMAIL_API_KEY"],
+      skipEmail,
+      skipPhone,
+    });
+    return text(JSON.stringify(result, null, 2));
+  } catch (err) {
+    return text(
+      `Provision failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+// ── recipe_list ──
+
+async function handleRecipeList(): Promise<ToolResult> {
+  const { getAllRecipeStatuses } = await import("../recipes/index.js");
+  const statuses = await getAllRecipeStatuses();
+  return text(JSON.stringify(statuses, null, 2));
+}
+
+// ── recipe_run ──
+
+async function handleRecipeRun(
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const channel = validateChannel(args["channel"]);
+  const { runRecipe } = await import("../recipes/index.js");
+  const result = await runRecipe(channel);
+  return text(JSON.stringify(result, null, 2));
+}
+
+// ── recipe_verify ──
+
+async function handleRecipeVerify(
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const rawChannel = args["channel"] as string | undefined;
+
+  if (rawChannel) {
+    const channel = validateChannel(rawChannel);
+    const { getRecipe } = await import("../recipes/index.js");
+    const recipe = getRecipe(channel);
+    if (!recipe) return text(`No recipe for channel: ${channel}`);
+    const result = await recipe.verify();
+    return text(JSON.stringify(result, null, 2));
+  }
+
+  const { verifyAllRecipes } = await import("../recipes/index.js");
+  const results = await verifyAllRecipes();
+  return text(JSON.stringify(results, null, 2));
 }
 
 // ── MCP stdio Transport ──

@@ -72,14 +72,18 @@ export async function cmdChannelAdd(rawChannel: string): Promise<void> {
       case "email":
         added = await setupEmail(rl);
         break;
+      case "imessage":
+        // iMessage uses Blooio — guided paste flow (similar to email)
+        warn("iMessage requires a Blooio subscription ($289/mo).");
+        info("Visit https://blooio.com to sign up.");
+        info(
+          "After signup, run `agentdial channels add imessage` again with your API key.",
+        );
+        break;
       case "web":
         success("Web widget requires no credentials. Enabled.");
         added = true;
         break;
-      case "teams":
-      case "messenger":
-        warn(`${CHANNEL_DISPLAY_NAMES[channel]} is coming soon.`);
-        return;
     }
   } finally {
     rl.close();

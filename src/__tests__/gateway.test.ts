@@ -210,8 +210,7 @@ describe("formatResponse", () => {
       "whatsapp",
       "email",
       "voice",
-      "teams",
-      "messenger",
+      "imessage",
       "web",
     ];
 

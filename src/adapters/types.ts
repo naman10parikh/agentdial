@@ -2,16 +2,19 @@ import { z } from "zod";
 
 // ── Channel Types ──
 
+/**
+ * Channel type enum — kept in sync with the web connector registry.
+ * Source of truth: packages/web/src/lib/connectors/registry.ts
+ */
 export const ChannelTypeSchema = z.enum([
+  "email",
   "telegram",
   "discord",
   "slack",
   "sms",
-  "whatsapp",
-  "email",
   "voice",
-  "teams",
-  "messenger",
+  "whatsapp",
+  "imessage",
   "web",
 ]);
 

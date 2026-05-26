@@ -71,11 +71,8 @@ describe("getAdapter", () => {
   });
 
   it("throws for unregistered channel type", () => {
-    // teams, messenger, web don't have adapters yet
-    expect(() => getAdapter("teams" as ChannelType)).toThrow(
-      "No adapter for channel",
-    );
-    expect(() => getAdapter("messenger" as ChannelType)).toThrow(
+    // imessage, web don't have adapters yet
+    expect(() => getAdapter("imessage" as ChannelType)).toThrow(
       "No adapter for channel",
     );
     expect(() => getAdapter("web" as ChannelType)).toThrow(
@@ -99,8 +96,7 @@ describe("hasAdapter", () => {
   });
 
   it("returns false for unregistered channels", () => {
-    expect(hasAdapter("teams")).toBe(false);
-    expect(hasAdapter("messenger")).toBe(false);
+    expect(hasAdapter("imessage")).toBe(false);
     expect(hasAdapter("web")).toBe(false);
   });
 });

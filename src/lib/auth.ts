@@ -500,8 +500,8 @@ export interface AgentMailInbox {
 }
 
 const AgentMailResponseSchema = z.object({
-  id: z.string(),
-  address: z.string(),
+  inbox_id: z.string(),
+  email: z.string(),
 });
 
 /**
@@ -512,14 +512,13 @@ export async function createAgentMailInbox(
   apiKey: string,
   agentName: string,
 ): Promise<AgentMailInbox> {
-  const res = await fetch("https://api.agentmail.to/v1/inboxes", {
+  const res = await fetch("https://api.agentmail.to/v0/inboxes", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      name: agentName,
       display_name: agentName,
     }),
   });
@@ -530,7 +529,7 @@ export async function createAgentMailInbox(
   }
 
   const data = AgentMailResponseSchema.parse(await res.json());
-  return { id: data.id, address: data.address };
+  return { id: data.inbox_id, address: data.email };
 }
 
 // ── Auto-Provision Flow ──

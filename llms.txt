@@ -1,0 +1,16 @@
+# Agent Identity Protocol (AIP)
+
+> MCP gave agents tools. A2A gave agents collaboration. AIP gives agents identity.
+
+## Documentation
+
+- [README.md](README.md): MCP gave agents tools. A2A gave agents collaboration. AIP gives agents identity.
+- [AGENTS.md](AGENTS.md): > How agents (Claude Code, sub-agents, CI) work inside THIS repo. Repo-specific —
+- [CLAUDE.md](CLAUDE.md): > One repo = one recursively self-improving, agent-native harness. This is the reference
+- [QUICKSTART.md](QUICKSTART.md): bash
+- [CONTRIBUTING.md](CONTRIBUTING.md): Thanks for your interest in contributing. Here is everything you need.
+
+## Notes
+
+- This file follows the llms.txt convention (https://llmstxt.org) so AI agents can
+  discover this repo's docs without scraping. Generated from the README + key docs.

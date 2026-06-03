@@ -1,9 +1,49 @@
 # AgentDial TODO — v2.0 Roadmap
 
-**Last updated:** 2026-03-30
-**Current version:** 1.2.0 (npm published)
+**Last updated:** 2026-06-03 (CP117 harness-completion wave)
+**Current version:** 1.2.1 (npm published)
 **Target:** Universal Agent Identity Protocol — "Clerk/Stripe/Plaid for Agent Identity"
 **Codebase:** ~7K LOC, 9 adapters, 10 commands, 4 test suites
+
+---
+
+## CP117: Harness Completion — Identity & Channel Layer (2026-06-03)
+
+> Items added by the CP117 WAVE-D harness-completion pass. Mark `[x]` when done.
+
+### Behavioral Evals
+
+- [x] CP117-001: Add `eval/behavioral.test.ts` — 21 L2 behavioral test cases (normalizeMessage + formatResponse + routeMessage pipeline, all 7 channel shapes, edge cases). `npx vitest run eval/behavioral.test.ts` → all pass.
+- [x] CP117-002: Extend `vitest.config.ts` include to `["src/__tests__/**/*.test.ts", "eval/**/*.test.ts"]` so eval/ tests run with `pnpm test`.
+- [ ] CP117-003: Add L3 golden eval (`eval/golden.test.ts`) — 5 fixture transcripts per channel, assert response quality with keyword match (Hamel L3). Requires live agent backend mock.
+- [ ] CP117-004: Add observer harness (`eval/observer.ts`) — track message success/failure rate over time, write to `eval/results/`.
+
+### MCP — `send_message` Tool
+
+- [x] CP117-005: Add `send_message` MCP tool to `mcp-serve.ts` — accepts `{ channel, to, text, agent_url? }`, handles both direct dispatch and agent-backend relay. `tsc --noEmit` clean.
+- [ ] CP117-006: Integration test for `send_message` in `src/__tests__/mcp-serve.test.ts` — mock the gateway, verify tool handler returns correct JSON shape.
+- [ ] CP117-007: Publish updated MCP tool list to `llms.txt` (already exists — add `send_message` entry).
+
+### Claude Plugin
+
+- [x] CP117-008: Create `.claude-plugin/manifest.json` — plugin schema v1.0, full tool catalog (16 tools), MCP launch command, protocol metadata.
+- [ ] CP117-009: Test plugin manifest with `claude mcp add agentdial -- npx agentdial mcp-serve` in a fresh Claude Code session. Verify 16 tools appear in `/mcp` list.
+
+### A2A Agent Card
+
+- [x] CP117-010: Create `agent-card.json` at repo root — A2A v1 schema with full channel catalog, MCP interface, gateway endpoint docs, send_message A2A usage examples, channel unblock status.
+- [ ] CP117-011: Register `agent-card.json` URL in npm `package.json` under `"agentCard"` field for discoverability.
+- [ ] CP117-012: Add A2A card link to README `## Protocol Stack` table.
+
+### Channel Unblocks — Chairman Action Required
+
+> These are BLOCKED pending credentials. The code is ready; only creds are missing.
+
+- [ ] CP117-013: **[CHAIRMAN BLOCKED]** Twilio SMS — provide `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Then: `agentdial channels add sms`, configure webhook URL. Unblocks P1-032 through P1-041.
+- [ ] CP117-014: **[CHAIRMAN BLOCKED]** Twilio WhatsApp — same Twilio creds as above + join sandbox (`JOIN <word>` to +1-415-523-8886). Then: `agentdial channels add whatsapp`. Unblocks P1-042 through P1-049.
+- [ ] CP117-015: **[CHAIRMAN BLOCKED]** Twilio Voice — same Twilio creds. Configure TwiML webhook returning `<Gather><Say>` XML. Unblocks P1-050 through P1-057. Note: P0-001 (TwiML response bug) must also be fixed.
+- [ ] CP117-016: **[CHAIRMAN BLOCKED]** Kapso — sign up at kapso.io, obtain `KAPSO_API_KEY`. No adapter exists yet; adapter needs to be built after key is obtained.
+- [ ] CP117-017: Add Kapso adapter stub at `src/adapters/kapso.ts` — same interface as `TelegramAdapter`, mark methods as `// TODO: requires KAPSO_API_KEY`. Add to adapter registry. (No creds needed to write the stub.)
 
 ---
 

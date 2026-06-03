@@ -239,6 +239,43 @@ const TOOLS = [
       required: ["agent_name"],
     },
   },
+  {
+    name: "send_message",
+    description:
+      "Send a text message to a specific recipient on a configured channel. " +
+      "The gateway forwards the message to the channel platform (Telegram, SMS, Discord, etc.) " +
+      "via the agent's configured credentials. This is the primary A2A-consumable tool: " +
+      "another agent calls send_message to deliver content through agentdial's identity layer.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        channel: {
+          type: "string",
+          description: `Channel to send through: ${SUPPORTED_CHANNELS.join(", ")}`,
+        },
+        to: {
+          type: "string",
+          description:
+            "Recipient identifier. Format depends on channel: " +
+            "Telegram chat_id (number as string), Discord channel/user ID, " +
+            "Slack channel ID or user ID, E.164 phone for SMS/WhatsApp/Voice, " +
+            "email address for email.",
+        },
+        text: {
+          type: "string",
+          description: "Message text to send (required).",
+        },
+        agent_url: {
+          type: "string",
+          description:
+            "Override: forward the message to this agent backend URL instead of the " +
+            "configured one. The backend should accept a GatewayMessage and return a " +
+            "GatewayResponse. Useful when send_message is used as a relay.",
+        },
+      },
+      required: ["channel", "to", "text"],
+    },
+  },
 ];
 
 // ── Gateway State ──
@@ -284,6 +321,8 @@ async function handleToolCall(
         return await handleAuthLogout();
       case "auth_provision":
         return await handleAuthProvision(args);
+      case "send_message":
+        return await handleSendMessage(args);
       default:
         return text(`Unknown tool: ${name}`);
     }
@@ -771,6 +810,94 @@ async function handleRecipeVerify(
   const { verifyAllRecipes } = await import("../recipes/index.js");
   const results = await verifyAllRecipes();
   return text(JSON.stringify(results, null, 2));
+}
+
+// ── send_message ──
+
+/**
+ * Dispatch an outbound message through a configured channel.
+ *
+ * This is the primary tool that makes agentdial consumable by other agents
+ * (A2A pattern): an orchestrator calls send_message, agentdial's identity layer
+ * routes it through the correct platform adapter.
+ *
+ * When agent_url is provided the message is first routed through the agent
+ * backend (like an inbound message would be), then the response is dispatched
+ * to the recipient. When agent_url is omitted the text is sent directly.
+ */
+async function handleSendMessage(
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  const channel = validateChannel(args["channel"]);
+  const to = args["to"] as string | undefined;
+  const text_ = args["text"] as string | undefined;
+  const agentUrl = args["agent_url"] as string | undefined;
+
+  if (!to) throw new Error("'to' (recipient identifier) is required");
+  if (!text_) throw new Error("'text' is required");
+
+  // Build a synthetic GatewayMessage representing the outbound intent.
+  const { normalizeMessage, routeMessage, formatResponse } = await import(
+    "../lib/gateway.js"
+  );
+
+  const raw: Record<string, unknown> = {
+    text: text_,
+    from: "mcp-caller",
+    to,
+    timestamp: Date.now(),
+  };
+  const msg = normalizeMessage(raw, channel);
+
+  // If an agent_url is provided, route through the agent backend first.
+  if (agentUrl) {
+    const config = await loadConfig();
+    const finalUrl = agentUrl ?? config.agentUrl;
+    if (!finalUrl) {
+      return text(
+        "ERROR: agent_url not configured. Provide agent_url param or set it via identity_setup.",
+      );
+    }
+    const agentResponse = await routeMessage(msg, finalUrl);
+    const formatted = formatResponse(agentResponse, channel);
+    return text(
+      JSON.stringify(
+        {
+          ok: true,
+          channel,
+          to,
+          dispatched_via: "agent_backend",
+          agent_url: finalUrl,
+          agent_response: agentResponse,
+          formatted_payload: formatted.payload,
+        },
+        null,
+        2,
+      ),
+    );
+  }
+
+  // Direct send (no agent backend): return the channel-formatted payload so
+  // the caller (or the gateway HTTP layer) can forward it to the platform.
+  const directMsg = { text: text_ };
+  const formatted = formatResponse(directMsg, channel);
+
+  return text(
+    JSON.stringify(
+      {
+        ok: true,
+        channel,
+        to,
+        dispatched_via: "direct",
+        payload: formatted.payload,
+        note:
+          "Payload is channel-formatted. To actually deliver, POST to the " +
+          "platform's send API with the configured credentials.",
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 // ── MCP stdio Transport ──

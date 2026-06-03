@@ -1,0 +1,165 @@
+{
+  "schema_version": "a2a-v1",
+  "id": "agentdial",
+  "name": "agentdial",
+  "display_name": "AgentDial — Agent Identity & Channel Gateway",
+  "description": "The identity and channel layer for AI agents. agentdial implements the Agent Identity Protocol (AIP): give any agent a phone number, email inbox, Telegram handle, Discord presence, or Slack app — one IDENTITY.md file, one normalized GatewayMessage format, seven channels.",
+  "version": "1.2.1",
+  "author": "Naman Parikh",
+  "homepage": "https://github.com/naman10parikh/agentdial",
+  "license": "MIT",
+  "role": "infrastructure",
+  "capabilities": [
+    "channel-gateway",
+    "message-normalization",
+    "multi-channel-dispatch",
+    "agent-identity-management",
+    "webhook-routing",
+    "credential-management"
+  ],
+  "protocols": ["AIP-v1", "MCP-2024-11-05", "A2A-v1"],
+  "channels": [
+    {
+      "id": "telegram",
+      "display_name": "Telegram Bot",
+      "cost": "free",
+      "setup_time": "2 min"
+    },
+    {
+      "id": "discord",
+      "display_name": "Discord Bot",
+      "cost": "free",
+      "setup_time": "3 min"
+    },
+    {
+      "id": "slack",
+      "display_name": "Slack App",
+      "cost": "free",
+      "setup_time": "5 min"
+    },
+    {
+      "id": "sms",
+      "display_name": "SMS (Twilio)",
+      "cost": "~$0.008/msg",
+      "setup_time": "5 min",
+      "credentials_required": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]
+    },
+    {
+      "id": "whatsapp",
+      "display_name": "WhatsApp (Twilio)",
+      "cost": "~$0.005/msg",
+      "setup_time": "10 min",
+      "credentials_required": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]
+    },
+    {
+      "id": "email",
+      "display_name": "Email (SendGrid / AgentMail)",
+      "cost": "free tier",
+      "setup_time": "3 min"
+    },
+    {
+      "id": "voice",
+      "display_name": "Voice (Twilio / VAPI)",
+      "cost": "~$0.013/min",
+      "setup_time": "5 min",
+      "credentials_required": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]
+    }
+  ],
+  "mcp_interface": {
+    "command": "npx agentdial mcp-serve",
+    "transport": "stdio",
+    "protocol_version": "2024-11-05",
+    "primary_tool": "send_message",
+    "tools": [
+      "send_message",
+      "identity_status",
+      "identity_setup",
+      "channel_add",
+      "channel_remove",
+      "channel_list",
+      "channel_test",
+      "gateway_start",
+      "gateway_stop",
+      "recipe_list",
+      "recipe_run",
+      "recipe_verify",
+      "auth_status",
+      "auth_login",
+      "auth_logout",
+      "auth_provision"
+    ]
+  },
+  "gateway": {
+    "protocol": "HTTP",
+    "default_port": 3141,
+    "endpoints": {
+      "POST /message": "Accept a GatewayMessage, forward to agent backend, return GatewayResponse",
+      "POST /webhook/:channel": "Receive platform webhooks, normalize to GatewayMessage",
+      "GET /health": "Gateway health check"
+    },
+    "message_format": {
+      "schema": "GatewayMessage",
+      "fields": {
+        "id": "string — message ID (UUID or platform native ID)",
+        "channel": "string — one of: telegram, discord, slack, sms, whatsapp, email, voice, imessage, web",
+        "from": "string — sender identifier (platform-specific)",
+        "text": "string — message body",
+        "timestamp": "number — Unix ms",
+        "threadId": "string? — conversation thread",
+        "replyTo": "string? — message being replied to",
+        "attachments": "array? — image/audio/video/file URLs",
+        "metadata": "object? — channel-specific extras"
+      }
+    }
+  },
+  "a2a_usage": {
+    "description": "To send a message through agentdial from another agent, call the send_message MCP tool. agentdial acts as the identity/channel layer — other agents do not need to know about Telegram, Twilio, or SendGrid.",
+    "example": {
+      "tool": "send_message",
+      "args": {
+        "channel": "telegram",
+        "to": "123456789",
+        "text": "Hello from the orchestrating agent!"
+      }
+    },
+    "relay_example": {
+      "description": "Route through an agent backend before dispatch:",
+      "tool": "send_message",
+      "args": {
+        "channel": "sms",
+        "to": "+15551234567",
+        "text": "User query text",
+        "agent_url": "http://localhost:8080/agent"
+      }
+    }
+  },
+  "identity_protocol": {
+    "name": "AIP",
+    "version": "1.0",
+    "spec_file": "PROTOCOL.md",
+    "identity_file": "IDENTITY.md",
+    "description": "IDENTITY.md is a YAML-frontmatter Markdown file that declares an agent's name, channels, and backend URL. Machine-parseable and human-readable."
+  },
+  "install": {
+    "npm": "npm install -g agentdial",
+    "npx": "npx agentdial setup",
+    "mcp_add": "claude mcp add agentdial -- npx agentdial mcp-serve"
+  },
+  "channel_unblocks_needed": {
+    "twilio_sms_voice": {
+      "status": "BLOCKED — chairman action required",
+      "needed": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"],
+      "action": "Add Twilio credentials via: agentdial channels add sms"
+    },
+    "twilio_whatsapp": {
+      "status": "BLOCKED — chairman action required",
+      "needed": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "WhatsApp sandbox join code"],
+      "action": "Join Twilio WhatsApp sandbox, then: agentdial channels add whatsapp"
+    },
+    "kapso": {
+      "status": "BLOCKED — chairman action required",
+      "needed": ["KAPSO_API_KEY"],
+      "action": "Sign up at kapso.io, obtain API key"
+    }
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0",
+  "name": "agentdial",
+  "display_name": "AgentDial — Agent Identity & Channel Gateway",
+  "description": "Give your agent a real identity: phone, inbox, chat handles — one IDENTITY.md, seven channels. MCP gateway for managing agent identity, configuring channels (Telegram, Discord, Slack, SMS, WhatsApp, email, voice), and dispatching messages from Claude Code sessions.",
+  "version": "1.2.1",
+  "author": "Naman Parikh",
+  "homepage": "https://github.com/naman10parikh/agentdial",
+  "license": "MIT",
+  "icon": "https://raw.githubusercontent.com/naman10parikh/agentdial/main/landing/favicon.svg",
+  "mcp": {
+    "command": "npx",
+    "args": ["agentdial", "mcp-serve"],
+    "transport": "stdio",
+    "description": "Start the agentdial MCP server. Exposes identity management, channel configuration, gateway control, and the send_message tool.",
+    "install_hint": "Install globally: npm install -g agentdial\nOr run without install: npx agentdial mcp-serve"
+  },
+  "tools": [
+    {
+      "name": "send_message",
+      "description": "Send a message to a recipient on any configured channel (Telegram, SMS, Discord, Slack, WhatsApp, email, voice). The primary A2A-consumable tool.",
+      "category": "messaging"
+    },
+    {
+      "name": "identity_status",
+      "description": "Get current agent identity — name, tagline, channels, gateway status.",
+      "category": "identity"
+    },
+    {
+      "name": "identity_setup",
+      "description": "Create or update IDENTITY.md with agent name, tagline, and backend URL.",
+      "category": "identity"
+    },
+    {
+      "name": "channel_add",
+      "description": "Add and configure a channel with credentials.",
+      "category": "channels"
+    },
+    {
+      "name": "channel_remove",
+      "description": "Disable a configured channel.",
+      "category": "channels"
+    },
+    {
+      "name": "channel_list",
+      "description": "List all channels with status, cost, and setup time.",
+      "category": "channels"
+    },
+    {
+      "name": "channel_test",
+      "description": "Test channel credential presence.",
+      "category": "channels"
+    },
+    {
+      "name": "gateway_start",
+      "description": "Start the HTTP gateway server.",
+      "category": "gateway"
+    },
+    {
+      "name": "gateway_stop",
+      "description": "Stop the running gateway server.",
+      "category": "gateway"
+    },
+    {
+      "name": "recipe_list",
+      "description": "List setup recipes with friction tiers and costs.",
+      "category": "setup"
+    },
+    {
+      "name": "recipe_run",
+      "description": "Run a channel setup recipe.",
+      "category": "setup"
+    },
+    {
+      "name": "recipe_verify",
+      "description": "Verify channel is working end-to-end.",
+      "category": "setup"
+    },
+    {
+      "name": "auth_status",
+      "description": "Check authentication status.",
+      "category": "auth"
+    },
+    {
+      "name": "auth_login",
+      "description": "Initiate Clerk OAuth login.",
+      "category": "auth"
+    },
+    {
+      "name": "auth_logout",
+      "description": "Clear stored authentication.",
+      "category": "auth"
+    },
+    {
+      "name": "auth_provision",
+      "description": "Auto-provision managed channels after login.",
+      "category": "auth"
+    }
+  ],
+  "protocol": {
+    "name": "AIP",
+    "version": "1.0",
+    "spec": "PROTOCOL.md",
+    "identity_file": "IDENTITY.md",
+    "message_format": "GatewayMessage"
+  },
+  "keywords": [
+    "agent-identity",
+    "channel-gateway",
+    "telegram",
+    "discord",
+    "slack",
+    "sms",
+    "whatsapp",
+    "email",
+    "voice",
+    "mcp",
+    "a2a",
+    "aip",
+    "multi-channel",
+    "claude"
+  ],
+  "claude_add_command": "claude mcp add agentdial -- npx agentdial mcp-serve"
+}

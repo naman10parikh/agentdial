@@ -213,6 +213,36 @@ program
     await cmdMcpServe();
   });
 
+// ── Memory Search ──
+
+program
+  .command("memory-search <query>")
+  .description("Search this repo's own knowledge corpus (BM25 over brain/docs/memory)")
+  .option("-n, --limit <n>", "Max number of hits", "5")
+  .option("-j, --json", "Output as JSON")
+  .action(async (query: string, opts: { limit?: string; json?: boolean }) => {
+    const { cmdMemorySearch } = await import("./commands/memory-search.js");
+    await cmdMemorySearch(query, opts);
+  });
+
+// ── Sandbox Run ──
+
+program
+  .command("sandbox-run <command>")
+  .description("Run an agent/user-supplied command in an isolated E2B sandbox (not on the host)")
+  .option("-t, --timeout <seconds>", "Hard wall-clock cap in seconds", "60")
+  .option("--template <id>", "E2B template id (default: base image)")
+  .option("-j, --json", "Output as JSON")
+  .action(
+    async (
+      command: string,
+      opts: { timeout?: string; template?: string; json?: boolean },
+    ) => {
+      const { cmdSandboxRun } = await import("./commands/sandbox-run.js");
+      await cmdSandboxRun(command, opts);
+    },
+  );
+
 // ── Default action (show help with banner) ──
 
 program.action(() => {

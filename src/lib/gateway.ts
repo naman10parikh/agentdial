@@ -8,6 +8,7 @@ import type {
   GatewayMessage,
   GatewayResponse,
 } from "../adapters/types.js";
+import { withRunLog } from "./run-log.js";
 
 // ── Normalize incoming messages from any channel ──
 
@@ -178,18 +179,27 @@ export async function routeMessage(
   msg: GatewayMessage,
   agentUrl: string,
 ): Promise<GatewayResponse> {
-  const res = await fetch(agentUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(msg),
-    signal: AbortSignal.timeout(30_000),
-  });
+  // Observability spine: every dispatched message is timed and appended to the
+  // append-only run-log (logs/runs.jsonl) with channel + reply-length metrics.
+  // withRunLog is best-effort and re-throws the real error after logging, so the
+  // delivery contract (and the 503-on-non-200 behavior below) is unchanged.
+  return withRunLog(
+    { kind: "dispatch", channel: msg.channel },
+    async () => {
+      const res = await fetch(agentUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(msg),
+        signal: AbortSignal.timeout(30_000),
+      });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "unknown error");
-    throw new Error(`Agent returned ${String(res.status)}: ${body}`);
-  }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "unknown error");
+        throw new Error(`Agent returned ${String(res.status)}: ${body}`);
+      }
 
-  const data = (await res.json()) as unknown;
-  return GatewayResponseSchema.parse(data);
+      const data = (await res.json()) as unknown;
+      return GatewayResponseSchema.parse(data);
+    },
+  );
 }

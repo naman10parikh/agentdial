@@ -3,6 +3,7 @@ import { writeFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import {
   parseIdentity,
   writeIdentity,
@@ -55,6 +56,11 @@ Friendly and helpful.
     expect(identity.channels?.telegram?.enabled).toBe(true);
     expect(identity.channels?.telegram?.handle).toBe("@spark_bot");
     expect(identity.channels?.discord?.enabled).toBe(false);
+  });
+
+  it("parses the template the package ships", async () => {
+    const identity = await parseIdentity(fileURLToPath(new URL("../../templates/IDENTITY.md", import.meta.url)));
+    expect(identity.name).toBe("my-agent");
   });
 
   it("parses a minimal IDENTITY.md with only name", async () => {

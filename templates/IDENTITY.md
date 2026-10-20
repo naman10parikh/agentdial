@@ -22,10 +22,6 @@ channels:
     handle: ""
   voice:
     enabled: false
-  teams:
-    enabled: false
-  messenger:
-    enabled: false
   web: # planned: no adapter yet
     enabled: false
 ---

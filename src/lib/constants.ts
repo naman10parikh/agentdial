@@ -32,6 +32,29 @@ export const SUPPORTED_CHANNELS = [
   "web",
 ] as const;
 
+/**
+ * Listed channels with no adapter yet. They are planned, not live: `channels add` and the MCP tool
+ * `channel_add` enable nothing for them, and `channels list` shows them as planned. A site can
+ * already reach the agent through the gateway's `POST /message`, whose default channel name is `web`.
+ * Remove a channel from this set in the change that registers its adapter in src/adapters/index.ts.
+ */
+export const PLANNED_CHANNELS: ReadonlySet<string> = new Set(["imessage", "web"]);
+
+/** The channel names for help text and errors, with each planned channel marked. */
+export function channelNames(): string {
+  return SUPPORTED_CHANNELS.map((ch) =>
+    PLANNED_CHANNELS.has(ch) ? `${ch} (planned)` : ch,
+  ).join(", ");
+}
+
+/** Says a planned channel has no adapter yet; for `web`, it also names the endpoint that works today. */
+export function plannedChannelNote(channel: string): string {
+  const name = CHANNEL_DISPLAY_NAMES[channel] ?? channel;
+  const note = `${name} is planned: agentdial has no adapter for it yet.`;
+  if (channel !== "web") return note;
+  return `${note} A site can reach the agent today: run \`agentdial serve\`, then POST {"channel":"web","text":"Hello"} to /message.`;
+}
+
 /** Pricing tiers — mirrors ChannelTier from the web registry */
 export type ChannelTier = "free" | "pro" | "premium";
 
@@ -85,8 +108,8 @@ export const CHANNEL_DESCRIPTIONS: Record<string, string> = {
   sms: "Works on all phones — iPhone, Android, any carrier",
   voice: "Call your agent — uses SMS number",
   whatsapp: "One click — connect via Facebook login (powered by Kapso)",
-  imessage: "Premium — blue bubbles via Blooio managed relay",
-  web: "Embeddable chat widget for your website",
+  imessage: "Planned: blue bubbles via a Blooio managed relay",
+  web: "Planned: an embeddable chat widget for your website",
 };
 
 export const CHANNEL_SETUP_TIMES: Record<string, string> = {
@@ -97,8 +120,8 @@ export const CHANNEL_SETUP_TIMES: Record<string, string> = {
   sms: "1 click",
   voice: "Auto",
   whatsapp: "1 click",
-  imessage: "5 min",
-  web: "1 min",
+  imessage: "no adapter yet",
+  web: "no adapter yet",
 };
 
 export const CHANNEL_PROVIDERS: Record<string, string> = {

@@ -392,7 +392,7 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
     // ── Step 3: Smart credential detection ──
     heading("3/5  Detecting Existing Channels");
     const detected = await detectExistingChannels();
-    const enabledChannels: ChannelType[] = ["web"];
+    const enabledChannels: ChannelType[] = [];
 
     if (detected.length > 0) {
       info("Found existing credentials:");
@@ -525,7 +525,7 @@ export async function cmdSetup(opts: { file?: string }): Promise<void> {
       chalk.bold(`"${name}"`),
       tagline ? chalk.dim(tagline) : "",
       "",
-      `${unique.length} channel${unique.length > 1 ? "s" : ""} live:`,
+      `${unique.length} channel${unique.length === 1 ? "" : "s"} live:`,
       ...channelLines,
     ];
 

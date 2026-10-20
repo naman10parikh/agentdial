@@ -27,6 +27,8 @@ The agent backend NEVER changes — it always speaks `{ text } in → { text } o
 1. **Register the channel id** (model tier: none): add it to `ChannelTypeSchema` in `src/adapters/types.ts`
    and to `SUPPORTED_CHANNELS` + the metadata maps in `src/lib/constants.ts`
    (`CHANNEL_TIERS`, `CHANNEL_DISPLAY_NAMES`, `CHANNEL_COSTS`, `CHANNEL_PROVIDERS`, ...). Keep all maps in sync.
+   If the channel is listed in `PLANNED_CHANNELS` (today `imessage` and `web`), remove it there once its adapter
+   is registered in `src/adapters/index.ts`. `src/__tests__/channels.test.ts` fails until the two agree.
 2. **Add the inbound normalizer** (model tier: sonnet): extend `normalizeMessage()` in `src/lib/gateway.ts`
    with the platform's field names (its text field, its sender field, its timestamp). Prefer adding to the
    existing `??` fallback chains over branching — the function already handles Telegram-nested, Twilio

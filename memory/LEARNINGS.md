@@ -8,3 +8,7 @@ Every error → root cause → rule. Auto-compressed when >500 lines (memory-com
 - **Credentials never enter the repo.** Root cause of most secret leaks is config files committed by habit. Rule: credentials live only in `~/.agentdial/credentials/<channel>.json` (`0600` files, `0700` dir); the repo carries Twilio/SendGrid as `.env.example` placeholders only — a real token/SID/key is a release blocker.
 - **Validate every inbound webhook signature.** An unauthenticated `/webhook/:channel` is an open relay. Rule: enforce Twilio HMAC-SHA1, Slack HMAC-SHA256 (+ timestamp replay protection), and Telegram secret-token path validation in `src/lib/webhook-validation.ts`, covered by the gateway suite.
 - **Keep the test suite fully mocked.** Live API calls make CI flaky and cost money. Rule: the 58 Vitest cases (adapters / auth / gateway / identity) assert normalization, formatting, adapter compliance, and Zod validation with mocks only — no network.
+
+## 2026-10-20: A listed channel is not a live channel
+
+- **`imessage` and `web` were listed as channels with no adapter behind them.** `channels add web` said "Web Widget is live", `setup` enabled `web` by default, and `channel_add` saved iMessage credentials nothing could use. Root cause: `SUPPORTED_CHANNELS` doubled as the list of names and the list of working channels. Rule: a channel with no adapter goes in `PLANNED_CHANNELS` (`src/lib/constants.ts`), every surface reads it, and `src/__tests__/channels.test.ts` fails if that set drifts from the adapter registry.

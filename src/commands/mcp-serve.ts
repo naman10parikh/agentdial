@@ -28,9 +28,12 @@ import {
   VERSION,
   DEFAULT_IDENTITY_FILE,
   SUPPORTED_CHANNELS,
+  PLANNED_CHANNELS,
   FREE_CHANNELS,
   CHANNEL_DISPLAY_NAMES,
   CHANNEL_SETUP_TIMES,
+  channelNames,
+  plannedChannelNote,
 } from "../lib/constants.js";
 
 // ── MCP Protocol Types (inline — no SDK dependency) ──
@@ -86,7 +89,7 @@ const TOOLS = [
       properties: {
         channel: {
           type: "string",
-          description: `Channel name: ${SUPPORTED_CHANNELS.join(", ")}`,
+          description: `Channel name: ${channelNames()}`,
         },
         credentials: {
           type: "object",
@@ -251,7 +254,7 @@ const TOOLS = [
       properties: {
         channel: {
           type: "string",
-          description: `Channel to send through: ${SUPPORTED_CHANNELS.join(", ")}`,
+          description: `Channel to send through: ${channelNames()}`,
         },
         to: {
           type: "string",
@@ -340,7 +343,7 @@ function validateChannel(raw: unknown): ChannelType {
   const result = ChannelTypeSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(
-      `Unknown channel: ${String(raw)}. Supported: ${SUPPORTED_CHANNELS.join(", ")}`,
+      `Unknown channel: ${String(raw)}. Supported: ${channelNames()}`,
     );
   }
   return result.data;
@@ -425,6 +428,12 @@ async function handleChannelAdd(
   const channel = validateChannel(args["channel"]);
   const creds = (args["credentials"] as Record<string, string>) ?? {};
 
+  if (PLANNED_CHANNELS.has(channel)) {
+    return text(
+      `${plannedChannelNote(channel)}\nNothing was enabled and no credentials were saved.`,
+    );
+  }
+
   // Save credentials
   for (const [key, value] of Object.entries(creds)) {
     await saveCredential(channel, key, value);
@@ -486,7 +495,7 @@ async function handleChannelTest(
       [
         `Channel: ${CHANNEL_DISPLAY_NAMES[channel] ?? channel}`,
         `Credentials: ${creds.length > 0 ? creds.join(", ") : "none"}`,
-        `Status: ${creds.length > 0 ? "credentials present" : "missing credentials"}`,
+        `Status: ${PLANNED_CHANNELS.has(channel) ? "planned, no adapter yet" : creds.length > 0 ? "credentials present" : "missing credentials"}`,
       ].join("\n"),
     );
   }
@@ -517,11 +526,13 @@ async function handleChannelList(): Promise<ToolResult> {
     const isConfigured = configured.includes(ch);
     const isEnabled = channelConfigs[ch]?.enabled ?? false;
     const isFree = FREE_CHANNELS.has(ch);
-    const status = isEnabled
-      ? "enabled"
-      : isConfigured
-        ? "disabled"
-        : "not configured";
+    const status = PLANNED_CHANNELS.has(ch)
+      ? "planned"
+      : isEnabled
+        ? "enabled"
+        : isConfigured
+          ? "disabled"
+          : "not configured";
 
     return {
       channel: ch,

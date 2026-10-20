@@ -101,7 +101,7 @@
       "schema": "GatewayMessage",
       "fields": {
         "id": "string — message ID (UUID or platform native ID)",
-        "channel": "string — one of: telegram, discord, slack, sms, whatsapp, email, voice, imessage, web",
+        "channel": "string — one of: telegram, discord, slack, sms, whatsapp, email, voice, imessage, web. imessage and web are planned and have no adapter yet; POST /message uses web by default",
         "from": "string — sender identifier (platform-specific)",
         "text": "string — message body",
         "timestamp": "number — Unix ms",

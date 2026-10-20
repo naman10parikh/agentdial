@@ -114,6 +114,7 @@ The evals are mocked and need no network.
 It does not build or host your agent.
 It only carries messages to it and back.
 `imessage` and `web` are channel names, but neither has an adapter yet.
+Both are planned, so `channels add` enables nothing for them.
 The `web` channel is the plain `POST /message` endpoint.
 The built-in agent keeps history in memory only, so a restart forgets every conversation.
 To run a command an agent asks for, `sandbox-run` uses an E2B sandbox, a short-lived virtual machine, instead of your computer.

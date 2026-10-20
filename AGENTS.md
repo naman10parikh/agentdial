@@ -11,7 +11,9 @@ turns every inbound message from Telegram, Discord, Slack, SMS, WhatsApp, email 
 `GatewayMessage` (`{ id, channel, from, text, timestamp }`), sends it to any HTTP agent backend, and
 formats the reply for the channel it came from. The backend contract is `{ text }` in and `{ text }`
 out. The full spec is [`PROTOCOL.md`](PROTOCOL.md); it also defines Teams, Messenger and a web widget
-as channel types (section 1.3). Telegram, Discord and Slack need no payment details.
+as channel types (section 1.3). Those, and iMessage, are planned: AgentDial has no adapter for them
+yet. `channels add` enables nothing for `imessage` or `web`; a site can still reach the agent through `POST /message`.
+Telegram, Discord and Slack need no payment details.
 
 ## Its tools and how to call them
 
@@ -40,10 +42,10 @@ In Claude Code: `claude mcp add --transport stdio agentdial -- npx -y -p github:
 | --- | --- | --- |
 | `identity_status` | Read the agent's identity from IDENTITY.md: name, tagline, version, channels, gateway. | - |
 | `identity_setup` | Create or update IDENTITY.md. | name |
-| `channel_add` | Add and enable a channel, optionally with credentials. | channel |
+| `channel_add` | Add and enable a channel, optionally with credentials. A planned channel (`imessage`, `web`) is not enabled and saves nothing. | channel |
 | `channel_remove` | Disable a channel. | channel |
 | `channel_test` | Test one channel's credentials, or all of them. | - |
-| `channel_list` | List every supported channel with status, cost and setup time. | - |
+| `channel_list` | List every supported channel with status, cost and setup time. Planned channels show the status `planned`. | - |
 | `gateway_start` | Start the gateway on a port; needs an agent URL. | - |
 | `gateway_stop` | Stop the gateway. | - |
 | `recipe_list` | List the setup recipes with friction tier, cost, steps and status. | - |

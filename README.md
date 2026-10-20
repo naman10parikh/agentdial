@@ -203,6 +203,10 @@ and every dispatch is appended to a run log with its channel, duration and outco
 Telegram, Discord and Slack need no payment details. Email also works through AgentMail, and voice
 through Vapi.
 
+Two more channel names, `imessage` and `web`, are planned: neither has an adapter yet, so
+`channels add` enables nothing for them. A site can already reach the agent through the gateway's
+`POST /message`, whose default channel name is `web`.
+
 ### The IDENTITY.md spec
 
 The **Agent Identity Protocol v1.0** spec is in [PROTOCOL.md](PROTOCOL.md). The YAML frontmatter is
@@ -223,8 +227,8 @@ channels:
     handle: "Spark#1234"
   slack:
     enabled: true
-  web:
-    enabled: true
+  web: # planned: no adapter yet
+    enabled: false
 ---
 
 # Spark
@@ -321,7 +325,7 @@ The 16 MCP tools (`send_message`, `channel_add`, `identity_status` and the rest)
 ### Tests
 
 ```bash
-npm install && npm test    # 79 cases: identity parsing, gateway normalization, response formatting,
+npm install && npm test    # 86 cases: identity parsing, gateway normalization, response formatting,
                            # adapter compliance, Zod validation, and 21 behavioral evals
 npm run eval               # the behavioral evals alone
 ```

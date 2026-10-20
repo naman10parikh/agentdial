@@ -28,7 +28,7 @@ must stay behaviorally identical.
 1. **Define the tool** (model tier: sonnet): add an entry to the `TOOLS` array in `src/commands/mcp-serve.ts`
    with `name` (snake_case, `<noun>_<verb>` e.g. `memory_search`), a one-line `description` an agent can act
    on, and a JSON-Schema `inputSchema` (`{ type: "object", properties: {...}, required: [...] }`). Mirror the
-   existing entries — channel-typed args should reference `SUPPORTED_CHANNELS.join(", ")` in the description.
+   existing entries — channel-typed args should use `channelNames()` in the description, which marks planned channels.
 2. **Add the dispatch case** (model tier: sonnet): add `case "<tool_name>": return await handle<Tool>(args);`
    to the `switch (name)` in `handleToolCall()`. Keep it alphabetical-ish, next to its sibling (a memory tool
    near `identity_*`, a channel tool near `channel_*`).

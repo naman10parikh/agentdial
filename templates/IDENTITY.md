@@ -26,7 +26,7 @@ channels:
     enabled: false
   messenger:
     enabled: false
-  web:
+  web: # planned: no adapter yet
     enabled: false
 ---
 

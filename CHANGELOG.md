@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Planned channels are marked as planned.** `imessage` and `web` were listed as channels, but neither has an adapter. `channels list` and the MCP tool `channel_list` now show them as planned. `channels add` and `channel_add` enable nothing and save no credentials for them. `setup` no longer enables `web` by default, and the channel names in help text and errors carry "(planned)". A site can still reach the agent through the gateway's `POST /message`.
+
 ## 1.0.0 (2026-03-28)
 
 Initial release.
@@ -7,7 +13,7 @@ Initial release.
 ### Features
 
 - **Agent Identity Protocol (AIP) v1.0** -- single `IDENTITY.md` file defines agent name, personality, channels, and backend URL with YAML frontmatter
-- **10 channel adapters** -- Telegram, Discord, Slack, SMS, WhatsApp, Email, Voice, Teams, Messenger, Web Widget
+- **7 channel adapters** -- Telegram, Discord, Slack, SMS, WhatsApp, Email, Voice. (This line first said 10 and also listed Teams, Messenger and a web widget; those never shipped and are planned.)
 - **Unified gateway** -- normalizes all incoming messages to `GatewayMessage` format and routes to any HTTP agent backend
 - **Per-channel response formatting** -- Markdown for Telegram, embeds for Discord, blocks for Slack, plain text fallback
 - **Interactive setup wizard** -- `agentdial setup` guides through identity creation and channel configuration

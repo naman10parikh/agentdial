@@ -57,6 +57,9 @@ The following channel types are defined in AIP v1.0:
 | `messenger` | Meta Messenger     | Page ID                          |
 | `web`       | Web widget         | URL                              |
 
+AgentDial, the reference implementation, has adapters for the first seven types. `teams`, `messenger`
+and `web` are planned. AgentDial also accepts `imessage` as a planned type, with no adapter yet.
+
 ### 1.4 Markdown Body
 
 The Markdown body after the frontmatter is free-form. It is intended as a system prompt or personality description. Implementations MAY use it to inform agent behavior.

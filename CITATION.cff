@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it as below.
+title: "AgentDial: One identity for any agent across SMS, voice, email and chat apps."
+type: software
+authors:
+  - family-names: Parikh
+    given-names: Naman
+repository-code: "https://github.com/naman10parikh/agentdial"
+license: MIT
+version: "1.2.1"
+abstract: "One identity for any agent across SMS, voice, email and chat apps."
+keywords: ["agent-native", "agent-identity", "omnichannel", "twilio", "telegram-bot"]

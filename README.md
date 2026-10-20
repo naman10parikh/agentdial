@@ -20,7 +20,7 @@ AgentDial is an agent employee, a packaged specialist agent with its own skills,
 
 _AgentDial is part of an agent-native play for agent-native systems that can eventually be recursively self-improving and evolving, operated by agent employees._
 
-<p align="center"><img alt="AgentDial on the command line" src="assets/terminal.svg" width="880"></p>
+<p align="center"><img alt="AgentDial: a real task, run offline" src="assets/demo.svg" width="880"></p>
 <!-- fleet:header:end -->
 
 [![npm version](https://img.shields.io/npm/v/agentdial.svg)](https://www.npmjs.com/package/agentdial)

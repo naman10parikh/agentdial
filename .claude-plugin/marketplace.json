@@ -1,0 +1,17 @@
+{
+  "name": "agentdial",
+  "owner": {
+    "name": "Naman Parikh",
+    "url": "https://github.com/naman10parikh"
+  },
+  "metadata": {
+    "description": "AgentDial, an agent-native identity gateway: one IDENTITY.md, every channel."
+  },
+  "plugins": [
+    {
+      "name": "agentdial",
+      "source": "./",
+      "description": "One identity for any agent across SMS, voice, email and chat apps."
+    }
+  ]
+}

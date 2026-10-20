@@ -1,0 +1,17 @@
+{
+  "name": "agentdial",
+  "version": "1.2.1",
+  "description": "One identity for any agent across SMS, voice, email and chat apps.",
+  "contextFileName": "GEMINI.md",
+  "mcpServers": {
+    "agentdial": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "-p",
+        "github:naman10parikh/agentdial",
+        "agentdial-mcp"
+      ]
+    }
+  }
+}

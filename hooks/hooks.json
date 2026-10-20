@@ -1,0 +1,16 @@
+{
+  "description": "AgentDial guard: keeps channel credentials and the login session out of the agent's context.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-credentials.cjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

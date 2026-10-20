@@ -21,7 +21,9 @@ jobs:
       - run: npm install
       - run: npm run build
       - run: npm test
+      - run: npm run eval
       - run: node dist/index.js --version
+      - run: node dist/mcp.js < /dev/null
       - run: node dist/index.js --help
       - run: node dist/index.js status
       - run: node dist/index.js channels list

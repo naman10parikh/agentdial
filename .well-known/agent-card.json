@@ -1,0 +1,41 @@
+{
+  "name": "AgentDial",
+  "description": "One identity for any agent across SMS, voice, email and chat apps.",
+  "url": "https://github.com/naman10parikh/agentdial",
+  "version": "1.2.1",
+  "provider": {
+    "organization": "Naman Parikh",
+    "url": "https://github.com/naman10parikh"
+  },
+  "capabilities": {
+    "streaming": false
+  },
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "give-agent-identity",
+      "name": "give-agent-identity",
+      "description": "Put an agent on Telegram, Discord, Slack, SMS, WhatsApp, email or voice with one IDENTITY.md."
+    },
+    {
+      "id": "add-channel-adapter",
+      "name": "add-channel-adapter",
+      "description": "Add a new platform to AgentDial as an AIP channel without touching the agent backend."
+    },
+    {
+      "id": "add-mcp-tool",
+      "name": "add-mcp-tool",
+      "description": "Expose a new AgentDial capability to any MCP client."
+    },
+    {
+      "id": "debug-webhook-signature",
+      "name": "debug-webhook-signature",
+      "description": "Find why a real webhook gets a 403 or the agent never replies."
+    }
+  ]
+}

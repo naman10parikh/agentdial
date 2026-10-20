@@ -4,14 +4,18 @@
   "description": "Dial your AI agent into every platform. One identity. Every channel.",
   "type": "module",
   "bin": {
-    "agentdial": "./dist/index.js"
+    "agentdial": "./dist/index.js",
+    "agentdial-mcp": "./dist/mcp.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
+    "eval": "vitest run eval",
+    "improve": "node scripts/improve.mjs",
     "test:watch": "vitest",
     "prepublishOnly": "pnpm build && pnpm test"
   },

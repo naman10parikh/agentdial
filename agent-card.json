@@ -147,17 +147,17 @@
   },
   "channel_unblocks_needed": {
     "twilio_sms_voice": {
-      "status": "BLOCKED — chairman action required",
+      "status": "needs the operator's credentials",
       "needed": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"],
       "action": "Add Twilio credentials via: agentdial channels add sms"
     },
     "twilio_whatsapp": {
-      "status": "BLOCKED — chairman action required",
+      "status": "needs the operator's credentials",
       "needed": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "WhatsApp sandbox join code"],
       "action": "Join Twilio WhatsApp sandbox, then: agentdial channels add whatsapp"
     },
     "kapso": {
-      "status": "BLOCKED — chairman action required",
+      "status": "needs the operator's credentials",
       "needed": ["KAPSO_API_KEY"],
       "action": "Sign up at kapso.io, obtain API key"
     }

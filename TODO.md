@@ -40,7 +40,7 @@
 > These are BLOCKED pending credentials. The code is ready; only creds are missing.
 
 - [ ] CP117-013: **[CHAIRMAN BLOCKED]** Twilio SMS — provide `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`. Then: `agentdial channels add sms`, configure webhook URL. Unblocks P1-032 through P1-041.
-- [ ] CP117-014: **[CHAIRMAN BLOCKED]** Twilio WhatsApp — same Twilio creds as above + join sandbox (`JOIN <word>` to +1-415-523-8886). Then: `agentdial channels add whatsapp`. Unblocks P1-042 through P1-049.
+- [ ] CP117-014: **[CHAIRMAN BLOCKED]** Twilio WhatsApp — same Twilio creds as above + join sandbox (`JOIN <word>` to Twilio's WhatsApp sandbox number). Then: `agentdial channels add whatsapp`. Unblocks P1-042 through P1-049.
 - [ ] CP117-015: **[CHAIRMAN BLOCKED]** Twilio Voice — same Twilio creds. Configure TwiML webhook returning `<Gather><Say>` XML. Unblocks P1-050 through P1-057. Note: P0-001 (TwiML response bug) must also be fixed.
 - [ ] CP117-016: **[CHAIRMAN BLOCKED]** Kapso — sign up at kapso.io, obtain `KAPSO_API_KEY`. No adapter exists yet; adapter needs to be built after key is obtained.
 - [ ] CP117-017: Add Kapso adapter stub at `src/adapters/kapso.ts` — same interface as `TelegramAdapter`, mark methods as `// TODO: requires KAPSO_API_KEY`. Add to adapter registry. (No creds needed to write the stub.)
@@ -120,7 +120,7 @@
 ### SMS via Twilio (Status: NOT STARTED)
 
 - [ ] P1-032: Validate Twilio Account SID + Auth Token
-- [ ] P1-033: Auto-buy or use existing phone number (+1 866 834 2357)
+- [ ] P1-033: Auto-buy or use the existing phone number (already bought)
 - [ ] P1-034: Configure SMS webhook URL via Twilio API
 - [ ] P1-035: `agentdial serve --tunnel` registers webhook automatically
 - [ ] P1-036: Send SMS to Twilio number -> bot responds via SMS

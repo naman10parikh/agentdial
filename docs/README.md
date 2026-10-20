@@ -99,6 +99,7 @@ The optional `login` command talks to a hosted account service set in [src/lib/a
 Every day [.github/workflows/improve.yml](../.github/workflows/improve.yml) runs [scripts/improve.mjs](../scripts/improve.mjs).
 The script runs the evals and compares the pass count with [eval/baseline.json](../eval/baseline.json).
 It also lists outdated dependencies, then writes a proposal to `logs/improve/latest.md`.
+The workflow then opens one issue labelled `proposal`, or updates the one already open, so a person can review it.
 It uses no model and no secret, and a person merges every change.
 It is not L3, because the loop does not change its own steps.
 

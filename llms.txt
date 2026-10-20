@@ -1,16 +1,43 @@
-# Agent Identity Protocol (AIP)
+# AgentDial
 
-> MCP gave agents tools. A2A gave agents collaboration. AIP gives agents identity.
+> One identity for any agent across SMS, voice, email and chat apps. AgentDial is the reference implementation of the Agent Identity Protocol (AIP): one IDENTITY.md declares the agent, and one gateway carries Telegram, Discord, Slack, SMS, WhatsApp, email and voice to any HTTP agent backend as a single GatewayMessage. It ships a CLI (`agentdial`), an MCP server (`agentdial-mcp`), skills and a Claude Code plugin, and it improves itself through its own evals.
 
-## Documentation
+## Start here
 
-- [README.md](README.md): MCP gave agents tools. A2A gave agents collaboration. AIP gives agents identity.
-- [AGENTS.md](AGENTS.md): > How agents (Claude Code, sub-agents, CI) work inside THIS repo. Repo-specific —
-- [CLAUDE.md](CLAUDE.md): > One repo = one recursively self-improving, agent-native harness. This is the reference
-- [QUICKSTART.md](QUICKSTART.md): bash
-- [CONTRIBUTING.md](CONTRIBUTING.md): Thanks for your interest in contributing. Here is everything you need.
+- [AGENTS.md](AGENTS.md): what it does, every CLI command and MCP tool, where things live, what not to do
+- [README.md](README.md): overview, one-step install for every coding agent, quick start
+- [PROTOCOL.md](PROTOCOL.md): the Agent Identity Protocol v1.0 spec (IDENTITY.md, GatewayMessage, GatewayResponse)
 
-## Notes
+## Skills
 
-- This file follows the llms.txt convention (https://llmstxt.org) so AI agents can
-  discover this repo's docs without scraping. Generated from the README + key docs.
+- [give-agent-identity](skills/give-agent-identity/SKILL.md): put an agent on Telegram, Discord, Slack, SMS, WhatsApp, email or voice
+- [add-channel-adapter](skills/add-channel-adapter/SKILL.md): add a new platform to AgentDial without touching the agent backend
+- [add-mcp-tool](skills/add-mcp-tool/SKILL.md): expose a new AgentDial capability over MCP
+- [debug-webhook-signature](skills/debug-webhook-signature/SKILL.md): find why a real webhook gets a 403
+
+## MCP tools
+
+- [MCP server source](src/commands/mcp-serve.ts): 16 tools over stdio: identity_status, identity_setup, channel_add, channel_remove, channel_test, channel_list, gateway_start, gateway_stop, recipe_list, recipe_run, recipe_verify, auth_status, auth_login, auth_logout, auth_provision, send_message
+- [Plugin manifest](.claude-plugin/plugin.json): the Claude Code plugin (skills, sub-agents, hooks, MCP server)
+- [Gemini CLI extension](gemini-extension.json): context and MCP server for Gemini CLI
+- [A2A agent card](.well-known/agent-card.json): name, description, skills
+
+## Identity
+
+- [SOUL.md](identity/SOUL.md): who AgentDial is, its mission and boundaries
+- [BRAND.md](identity/BRAND.md): why the name, the tagline
+- [HEARTBEAT.md](identity/HEARTBEAT.md): what it checks and how often
+
+## Docs
+
+- [QUICKSTART.md](QUICKSTART.md): use the CLI, develop locally
+- [Voice recipe](docs/recipes/voice-twilio.md): voice through Twilio
+- [Email recipe](docs/recipes/email-sendgrid.md): email through SendGrid
+- [dsip.json](dsip.json): the self-improvement contract (level L2)
+- [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md)
+
+## Optional
+
+- [MEMORY.md](memory/MEMORY.md): long-term memory index
+- [LEARNINGS.md](memory/LEARNINGS.md): corrections that became rules
+- [Knowledge graph hub](brain/MOC%20-%20agentdial.md): the Obsidian brain

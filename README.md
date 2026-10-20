@@ -345,7 +345,7 @@ Every project in this fleet is graded on the same 11 harness components and on s
 | Tools/CLIs | ✅ | package.json:6-9 (agentdial, agentdial-mcp) |
 | Hooks | ✅ | .claude/settings.json:4; hooks/hooks.json:3; hooks/guard-credentials.cjs:1 |
 | Sub-agents | ✅ | .claude/agents/channel-adapter-reviewer.md:1; .claude/agents/identity-auditor.md:1 |
-| MCPs | ✅ | src/commands/mcp-serve.ts:56 (16 tools); src/mcp.ts:1; .mcp.json:3 |
+| MCPs | ✅ | src/commands/mcp-serve.ts:59 (16 tools); src/mcp.ts:1; .mcp.json:3 |
 | Dispatch | ✅ | src/lib/gateway.ts:178 (routeMessage); .github/workflows/improve.yml:8 (daily) |
 | Evals | ✅ | eval/behavioral.test.ts:35 (21 cases); .github/workflows/ci.yml:23-24 |
 | Observability | ✅ | src/lib/run-log.ts:45 (logs/runs.jsonl on every dispatch) |

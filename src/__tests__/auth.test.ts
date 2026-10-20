@@ -106,7 +106,7 @@ describe("JWT parsing", () => {
     const payload = Buffer.from(
       JSON.stringify({
         sub: "user_2xYz789",
-        email: "naman@energy.dev",
+        email: "agent@example.com",
         name: "Naman Parikh",
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 3600,
@@ -123,7 +123,7 @@ describe("JWT parsing", () => {
     ) as { sub: string; email: string; name: string };
 
     expect(decoded.sub).toBe("user_2xYz789");
-    expect(decoded.email).toBe("naman@energy.dev");
+    expect(decoded.email).toBe("agent@example.com");
     expect(decoded.name).toBe("Naman Parikh");
   });
 
